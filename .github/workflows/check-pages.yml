@@ -1,0 +1,107 @@
+name: Check public calculator
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/check-pages.yml'
+      - 'index.html'
+      - 'app.js'
+      - 'providers.js'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: calculator-smoke
+  cancel-in-progress: true
+
+env:
+  SITE_URL: https://mikhail228777.github.io/solar-calculator-delta-500/
+
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 4
+    steps:
+      - name: GitHub Pages serves this version and its NASA archive
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { setTimeout } from 'node:timers/promises';
+
+          const site = new URL(process.env.SITE_URL);
+          const commit = process.env.GITHUB_SHA;
+          const source = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/index.html`;
+          const original = await fetch(source, { signal: AbortSignal.timeout(10000) });
+          assert.ok(original.ok, `GitHub source: HTTP ${original.status}`);
+          const expected = await original.text();
+
+          const page = new URL(site);
+          page.searchParams.set('revision', commit);
+          for (let attempt = 0; attempt < 18; attempt += 1) {
+            const served = await fetch(page, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+            if (served?.ok && await served.text() === expected) break;
+            assert.ok(attempt < 17, `Pages did not serve ${commit.slice(0, 7)} (last HTTP ${served?.status ?? 'unavailable'})`);
+            await setTimeout(5000);
+          }
+          const data = await fetch(new URL('data/nasa-power-climatology.json', site), { signal: AbortSignal.timeout(10000) });
+          assert.ok(data.ok, `Bundled data: HTTP ${data.status}`);
+          const profile = (await data.json()).cells?.['47.5,39.5'];
+          assert.ok(profile?.length === 12 && profile.every(value => Number.isFinite(value) && value >= 0));
+          console.log(`Pages serves ${commit.slice(0, 7)} and 12 archival months for Rostov-on-Don.`);
+          JS
+      - name: Photon responds to an address search and permits browser requests
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = new URL(process.env.SITE_URL).origin;
+          const endpoint = new URL('https://photon.komoot.io/api/');
+          endpoint.search = new URLSearchParams({
+            q: 'Ростов-на-Дону, Большая Садовая улица', countrycode: 'RU', limit: '5', lang: 'ru'
+          });
+          const reply = await fetch(endpoint, { headers: { Origin: origin }, signal: AbortSignal.timeout(16000) });
+          assert.ok(reply.ok, `Photon: HTTP ${reply.status}`);
+          assert.ok(['*', origin].includes(reply.headers.get('access-control-allow-origin')), 'Photon did not permit the GitHub Pages origin.');
+          const { features } = await reply.json();
+          assert.ok(features?.some(feature => {
+            const [longitude, latitude] = feature.geometry?.coordinates ?? [];
+            return feature.properties?.countrycode?.toUpperCase() === 'RU'
+              && Math.abs(longitude - 39.7) < 0.5 && Math.abs(latitude - 47.24) < 0.5;
+          }), 'Photon did not return a Russian address near Rostov-on-Don.');
+          console.log('Photon returned valid coordinates and allowed the browser origin.');
+          JS
+      - name: OpenStreetMap serves a tile
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const site = process.env.SITE_URL;
+          const reply = await fetch('https://tile.openstreetmap.org/12/2499/1436.png', {
+            headers: { 'User-Agent': `Delta500SolarCalculator/1.0 (+${site})`, Referer: site },
+            signal: AbortSignal.timeout(12000)
+          });
+          assert.ok(reply.ok, `OpenStreetMap: HTTP ${reply.status}`);
+          assert.match(reply.headers.get('content-type') ?? '', /^image\/png/);
+          console.log('OpenStreetMap returned a PNG tile near Rostov-on-Don.');
+          JS
+      - name: NASA POWER returns 12 monthly values and permits browser requests
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const origin = new URL(process.env.SITE_URL).origin;
+          const endpoint = new URL('https://power.larc.nasa.gov/api/temporal/climatology/point');
+          endpoint.search = new URLSearchParams({
+            parameters: 'ALLSKY_SFC_SW_DWN', community: 'RE', latitude: '62.5', longitude: '129.5', format: 'JSON'
+          });
+          const reply = await fetch(endpoint, { headers: { Origin: origin }, signal: AbortSignal.timeout(16000) });
+          assert.ok(reply.ok, `NASA POWER: HTTP ${reply.status}`);
+          assert.ok(['*', origin].includes(reply.headers.get('access-control-allow-origin')), 'NASA POWER did not permit the GitHub Pages origin.');
+          const irradiation = (await reply.json()).properties?.parameter?.ALLSKY_SFC_SW_DWN;
+          const months = 'JAN FEB MAR APR MAY JUN JUL AUG SEP OCT NOV DEC'.split(' ');
+          assert.ok(months.every(month => Number.isFinite(irradiation?.[month]) && irradiation[month] >= 0));
+          console.log('NASA POWER returned 12 values outside the local archive and allowed the browser origin.');
+          JS
