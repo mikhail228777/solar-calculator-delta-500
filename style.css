@@ -221,6 +221,21 @@ summary { cursor: pointer; color: var(--link); font-weight: 650; }
 .coordinates div { flex: 0 1 168px; }
 .coordinates label { font-size: .8rem; }
 
+.roof-sizing {
+  display: grid;
+  grid-template-columns: minmax(210px, .8fr) minmax(0, 2fr);
+  gap: 10px 18px;
+  align-items: center;
+  margin: 12px 0 15px;
+  padding: 12px 14px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+  background: #f7f9fc;
+}
+.roof-area-input input { padding-right: 40px; }
+.roof-sizing .field-note { margin: 0; }
+.roof-capacity { margin: 5px 0 0; color: var(--link); font-size: .83rem; font-weight: 650; }
+
 .station { border-block: 1px solid var(--line); padding-block: 12px; }
 .station summary {
   display: flex;
@@ -318,6 +333,7 @@ summary { cursor: pointer; color: var(--link); font-weight: 650; }
   .form-actions .text-button { text-align: center; }
   .coordinates div { flex: 1 1 120px; }
   .coordinates button { flex-basis: 100%; }
+  .roof-sizing { grid-template-columns: minmax(0, 1fr); padding: 11px; }
   .map { height: 250px; }
   .result-summary, .production { padding: 16px; }
   .result-heading { grid-template-columns: 1fr; }

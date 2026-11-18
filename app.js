@@ -9,6 +9,7 @@ const calculate = element('calculate');
 const addressResults = element('address-results');
 const results = element('results');
 const initialLocation = localCity('Ростов-на-Дону');
+const defaultPanelCount = 10;
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const format = (number, decimals = 0) => number.toLocaleString('ru-RU', { maximumFractionDigits: decimals });
 const pluralYears = value => {
@@ -58,14 +59,6 @@ function resetSearch() {
   find.disabled = false;
   addressResults.hidden = true;
   addressResults.replaceChildren();
-}
-
-function updateStationSummary() {
-  const count = element('panels').valueAsNumber;
-  const summary = element('station-summary');
-  summary.textContent = element('panels').checkValidity() && count > 0
-    ? `${format(count)} шт. · ${format(count * PANEL.kilowatts, 1)} кВт`
-    : 'Укажите число панелей';
 }
 
 function updateSatelliteLink(point) {
@@ -317,20 +310,64 @@ function optionalAmount(id, min, max, message) {
   return value;
 }
 
-function readInputs() {
-  const panels = element('panels');
-  const tilt = element('tilt');
-  if (!panels.checkValidity() || !Number.isInteger(panels.valueAsNumber)) {
-    invalidField(panels, 'Укажите целое число панелей от 1 до 10 000.');
+function stationSize() {
+  const roofField = element('roof-area');
+  const panelsField = element('panels');
+  const maxPanels = Number(panelsField.max);
+  const maxArea = Number((maxPanels * PANEL.squareMeters).toFixed(6));
+  const area = roofField.value.trim() ? parseDecimal(roofField.value) : null;
+  if (area !== null && (!Number.isFinite(area) || area <= 0 || area > maxArea)) {
+    return { field: roofField, error: `Укажите площадь больше нуля и до ${format(maxArea, 2)} м².` };
   }
+
+  const capacity = area === null ? null : Math.floor(area / PANEL.squareMeters);
+  if (capacity === 0) {
+    return { field: roofField, error: `Для одной панели нужно примерно ${format(PANEL.squareMeters, 3)} м² свободного ската.` };
+  }
+
+  const automatic = panelsField.value === '' && !panelsField.validity.badInput;
+  const count = automatic ? capacity ?? defaultPanelCount : panelsField.valueAsNumber;
+  if (!panelsField.checkValidity() || !Number.isInteger(count)) {
+    return { capacity, field: panelsField, error: `Укажите целое число панелей от 1 до ${format(maxPanels)}.` };
+  }
+  if (capacity !== null && count > capacity) {
+    return { capacity, field: panelsField, error: `Для этой площади укажите не больше ${format(capacity)} панелей.` };
+  }
+  return { area, capacity, count, fromRoof: automatic && capacity !== null };
+}
+
+function updateStationSummary() {
+  const size = stationSize();
+  const summary = element('station-summary');
+  summary.hidden = size.fromRoof === true;
+  summary.textContent = size.error
+    ? 'Проверьте параметры'
+    : `${format(size.count)} шт. · ${format(size.count * PANEL.kilowatts, 1)} кВт`;
+  element('panels').placeholder = size.capacity ?? defaultPanelCount;
+
+  const hint = element('roof-capacity');
+  const estimate = size.field?.id === 'roof-area' ? size.error
+    : size.capacity ? `По площади до ${format(size.capacity)} шт. · ${format(size.capacity * PANEL.kilowatts, 1)} кВт` : '';
+  hint.textContent = estimate;
+  hint.hidden = !estimate;
+}
+
+function readInputs() {
+  const size = stationSize();
+  if (size.error) invalidField(size.field, size.error);
+  const tilt = element('tilt');
   if (!tilt.checkValidity() || !Number.isInteger(tilt.valueAsNumber)) {
     invalidField(tilt, 'Укажите наклон от 0 до 90 градусов.');
   }
   return {
     ...location,
-    panels: panels.valueAsNumber,
+    panels: size.count,
+    roofArea: size.area,
+    roofCapacity: size.capacity,
+    fromRoof: size.fromRoof,
     tilt: tilt.valueAsNumber,
     azimuth: Number(element('azimuth').value),
+    direction: element('azimuth').selectedOptions[0].textContent.toLocaleLowerCase('ru-RU'),
     bill: optionalAmount('bill', 0, 100_000_000, 'Укажите сумму счёта за месяц в рублях.'),
     tariff: optionalAmount('tariff', 0.01, 1000, 'Укажите тариф от 0,01 до 1 000 ₽ за кВт·ч.'),
     cost: optionalAmount('cost', 1, 1_000_000_000, 'Укажите стоимость станции в рублях или оставьте поле пустым.')
@@ -369,7 +406,9 @@ function drawChart(monthly) {
 
 function renderResult(climate, inputs, demo) {
   const data = calculateSolar(climate.irradiation, inputs);
-  element('result-location').textContent = `${inputs.label} · ${format(inputs.panels)} шт. · ${format(data.power, 1)} кВт${demo ? ' · пример' : ''}`;
+  const count = `${inputs.fromRoof ? 'до ' : ''}${format(inputs.panels)} шт.`;
+  const roof = inputs.roofArea === null ? '' : ` · свободная площадь ${format(inputs.roofArea, 2)} м²`;
+  element('result-location').textContent = `${inputs.label}${roof} · ${count} · ${format(data.power, 1)} кВт${demo ? ' · пример' : ''}`;
   element('generation').textContent = `≈ ${format(data.annual)} кВт·ч`;
   element('saving-metric').hidden = data.saving === null;
   element('saving').textContent = data.saving === null ? '' : `≈ ${format(data.saving)} ₽`;
@@ -380,11 +419,12 @@ function renderResult(climate, inputs, demo) {
   const economicHint = element('economic-hint');
   economicHint.hidden = data.saving !== null;
   economicHint.textContent = 'Добавьте счёт за свет и тариф, чтобы увидеть экономию в рублях.';
-  element('result-note').textContent = `Источник · ${climate.source}. Оценка по солнечным данным местности. Тень от зданий и деревьев требует проверки на месте.`;
-  const direction = element('azimuth').selectedOptions[0].textContent.toLocaleLowerCase('ru-RU');
+  const roofNote = inputs.roofArea === null ? '' : ' Раскладку уточняют по форме и размерам ската.';
+  element('result-note').textContent = `Источник · ${climate.source}. Тень от зданий и деревьев требует проверки на месте.${roofNote}`;
   element('result-method').textContent = [
     `Один модуль Delta PV TOP даёт 500 Вт номинальной мощности. Площадь модулей ${format(data.panelArea, 1)} м² без креплений и проходов.`,
-    `В расчёте наклон ${inputs.tilt}°, направление — ${direction}, потери системы ${format(SYSTEM_LOSS * 100)}%.`,
+    inputs.roofArea === null ? '' : `Площадь одного модуля ${format(PANEL.squareMeters, 3)} м². В свободной зоне ${format(inputs.roofArea, 2)} м² по площади помещается до ${format(inputs.roofCapacity)} шт.`,
+    `В расчёте наклон ${inputs.tilt}°, направление — ${inputs.direction}, потери системы ${format(SYSTEM_LOSS * 100)}%.`,
     data.saving === null ? '' : `Модель предполагает, что объект использует ${format(SELF_USE * 100)}% выработки, в пределах среднего потребления по счёту за месяц. Оценка собственного потребления ${format(data.used)} кВт·ч в год. Доходы от продажи в сеть исключены из расчёта.`,
     data.payback === null ? '' : 'Простая окупаемость равна цене с монтажом, делённой на годовую экономию. Тариф принят постоянным.'
   ].filter(Boolean).join(' ');
@@ -447,7 +487,7 @@ form.addEventListener('input', event => {
   event.target.removeAttribute('aria-invalid');
   setError();
   resetResult();
-  if (event.target.id === 'panels') updateStationSummary();
+  if (event.target.id === 'panels' || event.target.id === 'roof-area') updateStationSummary();
   if (event.target.id === 'latitude' || event.target.id === 'longitude') {
     location = null;
     element('point-description').hidden = true;
@@ -460,6 +500,7 @@ element('demo').addEventListener('click', () => {
   choosePoint(initialLocation, { syncAddress: true });
   element('bill').value = '5 000';
   element('tariff').value = '6,00';
+  element('roof-area').value = '30';
   for (const field of form.querySelectorAll('[aria-invalid]')) field.removeAttribute('aria-invalid');
   updateStationSummary();
   calculateResult(true);

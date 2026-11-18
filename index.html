@@ -86,10 +86,24 @@
           </details>
         </section>
 
+        <div class="roof-sizing">
+          <div>
+            <label for="roof-area">Свободная площадь крыши</label>
+            <div class="unit-input roof-area-input">
+              <input id="roof-area" type="text" inputmode="decimal" maxlength="14" placeholder="Например, 30" aria-describedby="roof-help">
+              <span>м²</span>
+            </div>
+          </div>
+          <div>
+            <p class="field-note" id="roof-help">Вычтите окна, трубы, проходы и отступы из площади ската. Если площадь неизвестна, задайте число панелей в параметрах.</p>
+            <p class="roof-capacity" id="roof-capacity" aria-live="polite" hidden></p>
+          </div>
+        </div>
+
         <details class="station" id="station">
           <summary><span>Параметры станции</span><b id="station-summary">10 панелей · 5 кВт</b></summary>
           <div class="station-grid">
-            <div><label for="panels">Количество панелей</label><input id="panels" type="number" min="1" max="10000" step="1" value="10"></div>
+            <div><label for="panels">Количество панелей</label><input id="panels" type="number" min="1" max="10000" step="1" placeholder="10" aria-describedby="panels-help"></div>
             <div><label for="tilt">Наклон, °</label><input id="tilt" type="number" min="0" max="90" step="1" value="35"></div>
             <div><label for="azimuth">Направление</label>
               <select id="azimuth">
@@ -100,7 +114,7 @@
             </div>
             <div><label for="cost">Цена с монтажом, ₽</label><input id="cost" type="text" inputmode="decimal" maxlength="16" placeholder="Необязательно"></div>
           </div>
-          <p class="field-note">Укажите цену станции, если нужна оценка окупаемости.</p>
+          <p class="field-note" id="panels-help">Калькулятор подбирает количество по площади. Здесь можно задать меньше панелей. Без площади по умолчанию берём 10. Цена станции нужна для оценки окупаемости.</p>
         </details>
 
         <div class="form-actions">
