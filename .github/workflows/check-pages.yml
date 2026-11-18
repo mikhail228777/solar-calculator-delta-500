@@ -7,8 +7,14 @@ on:
     paths:
       - '.github/workflows/check-pages.yml'
       - 'index.html'
+      - 'industry.html'
+      - 'methodology.*'
       - 'app.js'
+      - 'calculator-template.js'
       - 'providers.js'
+      - 'solar.js'
+      - 'style.css'
+      - 'data/nasa-power-climatology.json'
 
 permissions:
   contents: read
@@ -25,7 +31,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 4
     steps:
-      - name: GitHub Pages serves this version and its NASA archive
+      - name: Pages serves both calculators and the examples return expected values
         run: |
           node --input-type=module <<'JS'
           import assert from 'node:assert/strict';
@@ -33,12 +39,13 @@ jobs:
 
           const site = new URL(process.env.SITE_URL);
           const commit = process.env.GITHUB_SHA;
-          const files = [['index.html', ''], ['app.js', 'app.js'], ['providers.js', 'providers.js']];
-          const expected = await Promise.all(files.map(async ([sourcePath, publishedPath]) => {
+          const files = ['index.html', 'industry.html', 'methodology.html', 'app.js',
+            'calculator-template.js', 'providers.js', 'solar.js', 'style.css'];
+          const expected = await Promise.all(files.map(async sourcePath => {
             const source = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/${sourcePath}`;
             const original = await fetch(source, { signal: AbortSignal.timeout(10000) });
             assert.ok(original.ok, `${sourcePath}: HTTP ${original.status}`);
-            const published = new URL(publishedPath, site);
+            const published = new URL(sourcePath === 'index.html' ? '' : sourcePath, site);
             published.searchParams.set('revision', commit);
             return [published, await original.text()];
           }));
@@ -56,7 +63,21 @@ jobs:
           assert.ok(data.ok, `Bundled data: HTTP ${data.status}`);
           const profile = (await data.json()).cells?.['47.5,39.5'];
           assert.ok(profile?.length === 12 && profile.every(value => Number.isFinite(value) && value >= 0));
-          console.log(`Pages serves ${commit.slice(0, 7)} and 12 archival months for Rostov-on-Don.`);
+
+          const document = await fetch(new URL('methodology.pdf', site), { signal: AbortSignal.timeout(10000) });
+          assert.ok(document.ok && (await document.text()).startsWith('%PDF-'), 'The formulas PDF is unavailable.');
+
+          const [, model] = expected.find(([url]) => url.pathname.endsWith('/solar.js'));
+          const { calculateBackup, calculateSolar } = await import(`data:text/javascript;base64,${Buffer.from(model).toString('base64')}`);
+          const home = calculateSolar(profile, { lat: 47.2357, tilt: 35, azimuth: 180, panels: 13,
+            bill: 5000, tariff: 6, cost: 450000 });
+          const factory = calculateSolar(profile, { lat: 47.2357, tilt: 15, azimuth: 180, panels: 809,
+            consumption: 90000, selfUse: 0.85, tariff: 9.5, cost: 18000000, maintenance: 250000 });
+          assert.equal(Math.round(home.saving), 25291);
+          assert.equal(Math.round(factory.saving), 3338576);
+          assert.equal(Math.round(factory.payback * 10), 54);
+          assert.equal(calculateBackup({ battery: 10, load: 0.5, charge: 100, inverter: 3 }).hours, 18);
+          console.log(`Pages serves ${commit.slice(0, 7)}. Both calculations match the examples based on the NASA archive.`);
           JS
       - name: Photon responds to an address search and permits browser requests
         if: always()

@@ -1,0 +1,46 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="description" content="Рассчитайте выработку, годовую экономию и окупаемость солнечной станции для предприятия.">
+  <meta name="robots" content="noindex, nofollow">
+  <title>Солнечные панели для предприятий · Delta 500</title>
+  <link rel="stylesheet" href="./leaflet.css">
+  <link rel="stylesheet" href="./style.css?v=2">
+  <script src="./leaflet.js" defer></script>
+  <script src="./app.js?v=2" type="module"></script>
+</head>
+<body data-mode="industry">
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">☀︎</span> Солнечный калькулятор</a>
+      <nav class="audience-nav" aria-label="Варианты расчёта">
+        <a href="./">Для дома</a>
+        <a href="./industry.html" aria-current="page">Для предприятий</a>
+      </nav>
+      <a class="passport-link" href="./panel.pdf" target="_blank" rel="noopener">Паспорт модуля <span aria-hidden="true">→</span></a>
+    </div>
+  </header>
+
+  <main>
+    <section class="hero" aria-labelledby="page-title">
+      <div class="container intro">
+        <div class="hero-copy">
+          <h1 id="page-title">Солнечная станция <span>для предприятия</span></h1>
+          <p>Оцените экономию за год и срок окупаемости по площади крыши, потреблению и стоимости станции.</p>
+        </div>
+        <figure class="module-photo">
+          <img src="./images/delta-module.png" alt="Лицевая и тыльная стороны модуля Delta PV TOP" width="400" height="400" fetchpriority="high">
+          <figcaption><span>Delta PV TOP</span><b>500 Вт</b></figcaption>
+        </figure>
+      </div>
+    </section>
+
+    <div class="container workspace" id="workspace">
+      <noscript>Для расчёта включите JavaScript в браузере.</noscript>
+    </div>
+  </main>
+  <footer class="site-footer"><div class="container">Предварительная оценка <a href="./methodology.html">Формулы и исходные данные →</a></div></footer>
+</body>
+</html>

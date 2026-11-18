@@ -1,6 +1,7 @@
-export const PANEL = Object.freeze({ kilowatts: 0.5, squareMeters: 1.961 * 1.134 });
+export const PANEL = Object.freeze({ kilowatts: 0.5, squareMeters: 1961 * 1134 / 1e6 });
 export const SYSTEM_LOSS = 0.20;
 export const SELF_USE = 0.60;
+export const BACKUP_EFFICIENCY = 0.90;
 
 export const MONTHS = ['Янв', 'Фев', 'Мар', 'Апр', 'Май', 'Июн', 'Июл', 'Авг', 'Сен', 'Окт', 'Ноя', 'Дек'];
 const DAYS = [31, 28.25, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31];
@@ -61,21 +62,33 @@ function tiltedIrradiation(horizontal, month, latitude, tilt, azimuth) {
   return horizontal * ((1 - diffuse) * beamRatio + diffuse * skyView + ALBEDO * groundView);
 }
 
-export function calculateSolar(irradiation, { lat, tilt, azimuth, panels, bill, tariff, cost }) {
+export function calculateSolar(irradiation, {
+  lat, tilt, azimuth, panels, tariff = null, selfUse = SELF_USE, cost = null, maintenance = 0,
+  bill = null, consumption = bill !== null && tariff !== null ? bill / tariff : null
+}) {
   const power = panels * PANEL.kilowatts;
-  const monthly = irradiation.map((dailyIrradiation, index) => (
+  const daily = irradiation.map((dailyIrradiation, index) => (
     tiltedIrradiation(dailyIrradiation, index, lat, tilt, azimuth)
-      * DAYS[index] * power * (1 - SYSTEM_LOSS)
+      * power * (1 - SYSTEM_LOSS)
   ));
+  const monthly = daily.map((energy, index) => energy * DAYS[index]);
   const annual = monthly.reduce((total, energy) => total + energy, 0);
 
-  // The bill implies an average monthly load. Cap each month's used energy at that load.
-  const hasEconomics = bill !== null && tariff !== null;
-  const saving = hasEconomics
-    ? Math.min(bill * 12, monthly.reduce((total, energy) => total + Math.min(energy * SELF_USE * tariff, bill), 0))
+  // Cap self-consumption in each month at the site's average monthly consumption.
+  const used = consumption !== null && tariff !== null && selfUse !== null
+    ? monthly.reduce((total, energy) => total + Math.min(energy * selfUse, consumption), 0)
     : null;
-  const used = saving === null ? null : saving / tariff;
+  const grossSaving = used === null ? null : used * tariff;
+  const saving = grossSaving === null ? null : grossSaving - maintenance;
   const payback = cost !== null && saving > 0 ? cost / saving : null;
 
-  return { monthly, annual, power, used, saving, payback, panelArea: panels * PANEL.squareMeters };
+  return { daily, monthly, annual, power, used, grossSaving, saving, payback, panelArea: panels * PANEL.squareMeters };
+}
+
+export function calculateBackup({ battery, load, charge, inverter }) {
+  if (battery === null || load === null) return null;
+
+  const energy = battery * (charge / 100) * BACKUP_EFFICIENCY;
+  const overloaded = inverter !== null && load > inverter;
+  return { energy, hours: overloaded ? null : energy / load };
 }

@@ -1,0 +1,108 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="robots" content="noindex, nofollow">
+  <meta name="description" content="Формулы выработки, экономии, окупаемости и резерва солнечной станции с модулями Delta 500 Вт.">
+  <title>Методика расчёта · Delta 500</title>
+  <link rel="stylesheet" href="./style.css?v=2">
+  <style>
+    .document { width: min(790px, calc(100% - 40px)); margin: 40px auto 56px; }
+    .document h1 { margin-bottom: 8px; font-size: clamp(2rem, 5.3vw, 3.35rem); }
+    .document .model { margin: 0 0 28px; color: var(--muted); font-size: .93rem; }
+    .document section { margin-top: 30px; }
+    .document h2 { margin: 0 0 10px; font-size: 1.36rem; letter-spacing: -.018em; }
+    .document p, .document ul { margin: 8px 0; }
+    .document ul { padding-left: 22px; }
+    .document li + li { margin-top: 5px; }
+    .formula {
+      padding: 8px 13px;
+      border-left: 3px solid #6f98cc;
+      border-radius: 0 6px 6px 0;
+      background: #eaf1fa;
+      color: #142b45;
+      font-weight: 640;
+      overflow-wrap: anywhere;
+    }
+    .document var { font-style: normal; }
+    .example { padding: 9px 13px; border: 1px solid var(--line); border-radius: 8px; background: #fff; }
+    .references { font-size: .91rem; }
+    @media print {
+      @page { size: A4; margin: 15mm 16mm; }
+      :root { background: #fff; font-size: 11pt; line-height: 1.44; }
+      .site-header { display: none; }
+      .document { width: auto; margin: 0; }
+      .document h1 { font-size: 26pt; line-height: 1.07; }
+      .document h2 { font-size: 15pt; break-after: avoid; }
+      .document .model { margin-bottom: 18px; }
+      .document section { margin-top: 15px; }
+      .document p, .document ul { margin-block: 6px; }
+      .document p, .formula, .example { break-inside: avoid; }
+      .formula, .example { print-color-adjust: exact; }
+      .next-page { break-before: page; }
+    }
+  </style>
+</head>
+<body>
+  <header class="site-header">
+    <div class="container header-inner">
+      <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">☀︎</span> Солнечный калькулятор</a>
+      <nav class="audience-nav" aria-label="Варианты расчёта">
+        <a href="./">Для дома</a>
+        <a href="./industry.html">Для предприятий</a>
+      </nav>
+      <a class="passport-link" href="./methodology.pdf" download>Скачать PDF <span aria-hidden="true">↓</span></a>
+    </div>
+  </header>
+
+  <main class="document">
+    <h1>Методика расчёта солнечной станции</h1>
+    <p class="model">DELTA PV TOP 500-54/2BF M210 HC</p>
+
+    <section aria-labelledby="size-title">
+      <h2 id="size-title">Площадь и мощность</h2>
+      <p>Паспортные параметры одного модуля — <strong>500 Вт</strong> и <strong>1,961 × 1,134 м</strong>. Для подбора вычтите из площади ската препятствия, отступы, проходы и технологические промежутки между рядами. <a href="https://mikhail228777.github.io/solar-calculator-delta-500/panel.pdf">Паспорт модуля</a></p>
+      <p class="formula">Площадь модуля = 1,961 × 1,134 = 2,223774 м²<br>Число модулей = ⌊свободная площадь / 2,223774⌋<br>Мощность станции, кВт = число модулей × 0,5</p>
+      <p>⌊…⌋ означает округление вниз. Это верхняя оценка по площади. При известной раскладке укажите фактическое число модулей. Для скатов с разными углами посчитайте выработку каждого отдельно и сложите.</p>
+    </section>
+
+    <section aria-labelledby="energy-title">
+      <h2 id="energy-title">Выработка по координатам</h2>
+      <p><var>H<sub>гор</sub></var> — среднемесячная энергия излучения за сутки на горизонтальной поверхности, в кВт·ч/м². Это параметр <code>ALLSKY_SFC_SW_DWN</code> из NASA POWER. Калькулятор берёт архивное значение для ячейки 1° или запрашивает эту ячейку через API. Средние за многолетний период помогают оценить сезонность. <a href="https://power.larc.nasa.gov/docs/services/api/temporal/climatology/">NASA POWER Climatology</a></p>
+      <p class="formula">H<sub>скат</sub> = H<sub>гор</sub> × [(1 − f) × R + f × (1 + cos β)/2 + 0,20 × (1 − cos β)/2]</p>
+      <p>β — наклон панели. <var>f</var> — оценка доли рассеянного излучения по корреляции Erbs. Код применяет её приближённо к среднемесячным суточным данным. <var>R</var> — отношение сумм косинусов угла падения на скат и на горизонт за типовой день месяца, с учётом широты и азимута и ограничением до 6. Последнее слагаемое учитывает отражение от земли с коэффициентом 0,20. <a href="https://doi.org/10.1016/0038-092X(82)90302-4">Erbs, Klein, Duffie</a></p>
+      <p class="formula">E<sub>сутки</sub> = H<sub>скат</sub> × (мощность станции / 1 кВт/м²) × (1 − 0,20)<br>E<sub>месяц</sub> = E<sub>сутки</sub> × число дней в месяце<br>E<sub>год</sub> = сумма E<sub>месяц</sub> за 12 месяцев</p>
+      <p>1 кВт/м² — излучение при паспортной мощности. Потери системы приняты равными 20%. Для февраля используется 28,25 суток. Затенение, снег и дополнительная выработка тыльной стороны требуют оценки на объекте.</p>
+    </section>
+
+    <section class="next-page" aria-labelledby="finance-title">
+      <h2 id="finance-title">Экономия на электроэнергии и окупаемость</h2>
+      <p><var>L</var> — среднее потребление за месяц в кВт·ч. Для предприятия его вводят из счёта или по данным учёта. Для дома <var>L</var> = расходы за энергию в месяц / тариф. <var>Т</var> — цена одного кВт·ч без фиксированных платежей. Тариф и полную цену станции с монтажом вводит пользователь.</p>
+      <p><var>s</var> — доля солнечной выработки, которую объект использует у себя. Для дома приняты 60%. Предприятие указывает свою долю с учётом дневной нагрузки, смен и выходных. Один коэффициент применяется ко всем месяцам.</p>
+      <p class="formula">Своя энергия за месяц, кВт·ч = min(E<sub>месяц</sub> × s, L)<br>Годовая экономия на счёте, ₽ = сумма своей энергии за 12 месяцев × Т<br>Чистая экономия, ₽/год = экономия на счёте − обслуживание за год<br>Простая окупаемость, лет = цена станции с монтажом / чистая экономия за год</p>
+      <p>Срок показывается при введённой цене и положительной чистой экономии. Обслуживание для дома и пустое поле обслуживания для предприятия принимаются за 0. Расчёт предполагает постоянный тариф и расходы. Продажа излишков, фиксированная плата за мощность, налоговые льготы, кредитование и деградация модулей в формулу не входят.</p>
+      <p class="example"><strong>Пример предприятия в Ростове-на-Дону.</strong> 1 800 м², наклон 15° на юг, 90 000 кВт·ч в месяц, тариф 9,50 ₽/кВт·ч, доля для своих нужд 85%, монтаж с оборудованием 18 млн ₽, обслуживание 250 000 ₽/год. До 809 модулей (404,5 кВт) дают около 444 406 кВт·ч за год. Экономия на счёте — 3 588 576 ₽, после обслуживания — 3 338 576 ₽, окупаемость — 5,4 года. Параметры примера условные.</p>
+      <p>Для рабочего расчёта предприятия сопоставьте солнечную выработку и показания счётчика по часам. Так можно учесть простои, выходные и разные тарифные зоны. OpenSolar рассчитывает экономию по интервальному профилю нагрузки и структуре тарифа. EnergySage оценивает экономию для домов по крыше, расходам на свет и местным предложениям. <a href="https://support.opensolar.com/hc/en-us/articles/5733939697679-How-OpenSolar-calculates-utility-bill-savings">OpenSolar</a> · <a href="https://www.energysage.com/solar/calculator/">EnergySage</a></p>
+    </section>
+
+    <section class="next-page" aria-labelledby="backup-title">
+      <h2 id="backup-title">Резерв для дома при отключении</h2>
+      <p><var>C</var> — полезная ёмкость батареи при полном заряде в кВт·ч, до потерь инвертора. <var>z</var> — доля заряда в начале отключения, по умолчанию 100%. <var>P</var> — средняя мощность выбранных приборов, переведённая из ватт в киловатты. Для холодильника или насоса используйте среднюю мощность с учётом пауз работы.</p>
+      <p class="formula">Энергия для приборов, кВт·ч = C × z × 0,90<br>Часы работы от батареи = энергия для приборов / P<br>Расход приборов за сутки, кВт·ч = 24 × P</p>
+      <p>КПД передачи энергии от батареи к приборам принят равным 90%. Если средняя нагрузка выше указанной мощности резервного выхода, сайт сообщает об этом и пропускает расчёт часов. Отдельно проверьте пусковую мощность приборов.</p>
+      <p>Дневная выработка панелей приводится отдельно как <var>E<sub>сутки</sub></var> за выбранный месяц. Чтобы панели могли питать приборы и заряжать батарею при отключении, нужен инвертор, который поддерживает работу от солнца в резервном режиме. Выработка в конкретный день зависит от облачности и времени суток. <a href="https://www.tesla.com/support/energy/solar-panels/after-installation/understanding-system-performance">Tesla о работе солнечной станции с резервом</a></p>
+      <p class="example"><strong>Пример дома в Ростове-на-Дону.</strong> 10 кВт·ч × 100% × 0,90 / 0,5 кВт = 18 часов от батареи. При 30 м² свободного ската получается до 13 модулей (6,5 кВт). С наклоном 35° на юг панели дают около 5,2 кВт·ч/сутки в январе и 31,4 в июне. При расходах 5 000 ₽/мес., тарифе 6 ₽/кВт·ч и цене 450 000 ₽ бытовая модель даёт 25 291 ₽ в год и 17,8 года окупаемости. Параметры примера условные.</p>
+    </section>
+
+    <section class="references" aria-labelledby="sources-title">
+      <h2 id="sources-title">Данные и код</h2>
+      <ul>
+        <li>Геокодинг по OpenStreetMap и выбор точки вручную. <a href="https://photon.komoot.io/">Photon</a> · <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a></li>
+        <li>Встроенный набор для 2 679 ячеек собран из опубликованной выгрузки NASA. <a href="https://github.com/hssaleh/Heat-Route-to-Firm-H2/blob/2cacb152e327a3246be186a40f83c2bcf6bc75e7/data/nasa_param_GHI.csv">Исходная выгрузка</a></li>
+        <li>Формулы исполняются в браузере. Ответы NASA, Photon и OpenStreetMap проверяет GitHub Actions. <a href="https://github.com/mikhail228777/solar-calculator-delta-500/blob/main/solar.js">Код расчёта</a> · <a href="https://github.com/mikhail228777/solar-calculator-delta-500/actions">Проверки API</a></li>
+      </ul>
+    </section>
+  </main>
+</body>
+</html>

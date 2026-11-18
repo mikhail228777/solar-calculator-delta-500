@@ -1,7 +1,11 @@
-import { calculateSolar, MONTHS, PANEL, SELF_USE, SYSTEM_LOSS } from './solar.js';
+import { mountCalculator } from './calculator-template.js';
+import { calculateBackup, calculateSolar, BACKUP_EFFICIENCY, MONTHS, PANEL, SYSTEM_LOSS } from './solar.js?v=2';
 import { loadClimate, localCity, searchAddresses } from './providers.js';
 
 const element = id => document.getElementById(id);
+const industry = document.body.dataset.mode === 'industry';
+mountCalculator(element('workspace'), industry);
+
 const form = element('calculator');
 const address = element('address');
 const find = element('find');
@@ -9,7 +13,8 @@ const calculate = element('calculate');
 const addressResults = element('address-results');
 const results = element('results');
 const initialLocation = localCity('Ростов-на-Дону');
-const defaultPanelCount = 10;
+const defaultPanelCount = industry ? null : 10;
+const backupMonth = element('backup-month');
 const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)');
 const format = (number, decimals = 0) => number.toLocaleString('ru-RU', { maximumFractionDigits: decimals });
 const pluralYears = value => {
@@ -27,6 +32,7 @@ let mapTiles;
 let marker;
 let mapHasTiles = false;
 let tileTimeout;
+let dayEstimate;
 
 function setStatus(message) {
   const status = element('address-status');
@@ -313,22 +319,23 @@ function optionalAmount(id, min, max, message) {
 function stationSize() {
   const roofField = element('roof-area');
   const panelsField = element('panels');
-  const maxPanels = Number(panelsField.max);
-  const maxArea = Number((maxPanels * PANEL.squareMeters).toFixed(6));
   const area = roofField.value.trim() ? parseDecimal(roofField.value) : null;
-  if (area !== null && (!Number.isFinite(area) || area <= 0 || area > maxArea)) {
-    return { field: roofField, error: `Укажите площадь больше нуля и до ${format(maxArea, 2)} м².` };
+  if (area !== null && (!Number.isFinite(area) || area <= 0)) {
+    return { field: roofField, error: 'Укажите свободную площадь больше нуля.' };
   }
 
-  const capacity = area === null ? null : Math.floor(area / PANEL.squareMeters);
+  const capacity = area === null ? null : Math.floor(area / PANEL.squareMeters + 1e-10);
   if (capacity === 0) {
     return { field: roofField, error: `Для одной панели нужно примерно ${format(PANEL.squareMeters, 3)} м² свободного ската.` };
   }
 
   const automatic = panelsField.value === '' && !panelsField.validity.badInput;
   const count = automatic ? capacity ?? defaultPanelCount : panelsField.valueAsNumber;
-  if (!panelsField.checkValidity() || !Number.isInteger(count)) {
-    return { capacity, field: panelsField, error: `Укажите целое число панелей от 1 до ${format(maxPanels)}.` };
+  if (count === null) {
+    return { field: roofField, error: 'Укажите свободную площадь крыши или количество панелей в параметрах.' };
+  }
+  if (!panelsField.validity.valid || !Number.isSafeInteger(count)) {
+    return { capacity, field: panelsField, error: 'Укажите целое число панелей от 1.' };
   }
   if (capacity !== null && count > capacity) {
     return { capacity, field: panelsField, error: `Для этой площади укажите не больше ${format(capacity)} панелей.` };
@@ -341,12 +348,12 @@ function updateStationSummary() {
   const summary = element('station-summary');
   summary.hidden = size.fromRoof === true;
   summary.textContent = size.error
-    ? 'Проверьте параметры'
+    ? ''
     : `${format(size.count)} шт. · ${format(size.count * PANEL.kilowatts, 1)} кВт`;
-  element('panels').placeholder = size.capacity ?? defaultPanelCount;
+  element('panels').placeholder = size.capacity ?? defaultPanelCount ?? '';
 
   const hint = element('roof-capacity');
-  const estimate = size.field?.id === 'roof-area' ? size.error
+  const estimate = size.field?.id === 'roof-area' && element('roof-area').value.trim() ? size.error
     : size.capacity ? `По площади до ${format(size.capacity)} шт. · ${format(size.capacity * PANEL.kilowatts, 1)} кВт` : '';
   hint.textContent = estimate;
   hint.hidden = !estimate;
@@ -359,7 +366,7 @@ function readInputs() {
   if (!tilt.checkValidity() || !Number.isInteger(tilt.valueAsNumber)) {
     invalidField(tilt, 'Укажите наклон от 0 до 90 градусов.');
   }
-  return {
+  const inputs = {
     ...location,
     panels: size.count,
     roofArea: size.area,
@@ -368,9 +375,28 @@ function readInputs() {
     tilt: tilt.valueAsNumber,
     azimuth: Number(element('azimuth').value),
     direction: element('azimuth').selectedOptions[0].textContent.toLocaleLowerCase('ru-RU'),
-    bill: optionalAmount('bill', 0, 100_000_000, 'Укажите сумму счёта за месяц в рублях.'),
     tariff: optionalAmount('tariff', 0.01, 1000, 'Укажите тариф от 0,01 до 1 000 ₽ за кВт·ч.'),
-    cost: optionalAmount('cost', 1, 1_000_000_000, 'Укажите стоимость станции в рублях или оставьте поле пустым.')
+    cost: optionalAmount('cost', 1, Number.MAX_SAFE_INTEGER, 'Укажите стоимость станции в рублях или оставьте поле пустым.')
+  };
+  if (industry) {
+    const share = optionalAmount('self-use', 0, 100, 'Укажите долю выработки на объекте от 0 до 100%.');
+    return {
+      ...inputs,
+      consumption: optionalAmount('consumption', 0, Number.MAX_SAFE_INTEGER, 'Укажите неотрицательное потребление в кВт·ч за месяц.'),
+      selfUse: share === null ? null : share / 100,
+      maintenance: optionalAmount('maintenance', 0, Number.MAX_SAFE_INTEGER, 'Укажите неотрицательные расходы на обслуживание за год.') ?? 0
+    };
+  }
+
+  const bill = optionalAmount('bill', 0, Number.MAX_SAFE_INTEGER, 'Укажите неотрицательные расходы на электроэнергию за месяц.');
+  const watts = optionalAmount('backup-load', 1, Number.MAX_SAFE_INTEGER, 'Укажите среднюю мощность приборов в ваттах, от 1 Вт.');
+  return {
+    ...inputs,
+    bill,
+    battery: optionalAmount('battery', 0, Number.MAX_SAFE_INTEGER, 'Укажите полезную ёмкость батареи в кВт·ч. Если батареи нет, введите 0.'),
+    load: watts === null ? null : watts / 1000,
+    charge: optionalAmount('charge', 0, 100, 'Укажите заряд от 0 до 100%.') ?? 100,
+    inverter: optionalAmount('inverter', 0.001, Number.MAX_SAFE_INTEGER, 'Укажите положительную мощность резервного выхода в кВт.')
   };
 }
 
@@ -404,29 +430,85 @@ function drawChart(monthly) {
   });
 }
 
-function renderResult(climate, inputs, demo) {
-  const data = calculateSolar(climate.irradiation, inputs);
-  const count = `${inputs.fromRoof ? 'до ' : ''}${format(inputs.panels)} шт.`;
-  const roof = inputs.roofArea === null ? '' : ` · свободная площадь ${format(inputs.roofArea, 2)} м²`;
-  element('result-location').textContent = `${inputs.label}${roof} · ${count} · ${format(data.power, 1)} кВт${demo ? ' · пример' : ''}`;
-  element('generation').textContent = `≈ ${format(data.annual)} кВт·ч`;
+function formatDuration(hours) {
+  const minutes = Math.round(hours * 60);
+  if (minutes === 0) return hours === 0 ? '0 ч' : 'Менее минуты';
+
+  const wholeHours = Math.floor(minutes / 60);
+  const remainingMinutes = minutes % 60;
+  const parts = [];
+  if (wholeHours) parts.push(`${format(wholeHours)} ч`);
+  if (remainingMinutes) parts.push(`${remainingMinutes} мин`);
+  return `≈ ${parts.join(' ')}`;
+}
+
+function updateDailyEstimate() {
+  const { daily, load } = dayEstimate;
+  element('solar-daily-energy').textContent = `≈ ${format(daily[Number(backupMonth.value)], 1)} кВт·ч`;
+  element('daily-load-metric').hidden = load === null;
+  element('daily-load').textContent = load === null ? '' : `${format(load * 24, 1)} кВт·ч`;
+}
+
+function renderBackup(data, inputs) {
+  const backup = calculateBackup(inputs);
+  element('backup-metric').hidden = backup === null;
+  const note = element('backup-note');
+  if (backup === null) {
+    note.textContent = 'Для оценки резерва укажите полезную ёмкость аккумулятора и среднюю мощность нужных приборов.';
+  } else if (backup.hours === null) {
+    element('backup-time').textContent = 'Выше лимита';
+    note.textContent = 'Средняя нагрузка выше мощности резервного выхода. Уменьшите нагрузку или проверьте параметры инвертора.';
+  } else {
+    element('backup-time').textContent = formatDuration(backup.hours);
+    note.textContent = `Нагрузка ${format(inputs.load * 1000, 1)} Вт, заряд ${format(inputs.charge, 1)}%. Доступно приборам около ${format(backup.energy, 2)} кВт·ч при КПД ${format(BACKUP_EFFICIENCY * 100)}%. Для работы при отключении проверьте резервный выход инвертора и пусковую мощность приборов.`;
+  }
+  note.hidden = false;
+
+  dayEstimate = { daily: data.daily, load: inputs.load };
+  updateDailyEstimate();
+}
+
+function renderEconomics(data, inputs) {
   element('saving-metric').hidden = data.saving === null;
   element('saving').textContent = data.saving === null ? '' : `≈ ${format(data.saving)} ₽`;
   element('payback-metric').hidden = data.payback === null;
   const roundedPayback = data.payback === null ? 0 : Math.round(data.payback * 10) / 10;
   element('payback').textContent = data.payback === null ? ''
     : roundedPayback === 0 ? 'Менее 0,1 года' : `≈ ${format(roundedPayback, 1)} ${pluralYears(roundedPayback)}`;
-  const economicHint = element('economic-hint');
-  economicHint.hidden = data.saving !== null;
-  economicHint.textContent = 'Добавьте счёт за свет и тариф, чтобы увидеть экономию в рублях.';
+
+  let hint = '';
+  if (data.saving === null) {
+    if (industry) hint = 'Для расчёта экономии укажите потребление, тариф и долю выработки для своих нужд.';
+    else if (inputs.bill !== null || inputs.tariff !== null || inputs.cost !== null) {
+      hint = 'Добавьте расходы за месяц и тариф, чтобы увидеть экономию в рублях.';
+    }
+  } else if (data.saving <= 0) {
+    hint = 'Экономия после расходов равна нулю или отрицательна. При этих вводных срок окупаемости определить нельзя.';
+  } else if (inputs.cost === null) {
+    hint = 'Добавьте стоимость станции с монтажом, чтобы оценить срок окупаемости.';
+  }
+  element('economic-hint').textContent = hint;
+  element('economic-hint').hidden = !hint;
+}
+
+function renderResult(climate, inputs, demo) {
+  const data = calculateSolar(climate.irradiation, inputs);
+  const count = `${inputs.fromRoof ? 'до ' : ''}${format(inputs.panels)} шт.`;
+  const roof = inputs.roofArea === null ? '' : ` · свободная площадь ${format(inputs.roofArea, 2)} м²`;
+  element('result-location').textContent = `${inputs.label}${roof} · ${count} · ${format(data.power, 1)} кВт${demo ? ' · пример с условными вводными' : ''}`;
+  element('generation').textContent = `≈ ${format(data.annual)} кВт·ч`;
+  if (!industry) renderBackup(data, inputs);
+  renderEconomics(data, inputs);
+
   const roofNote = inputs.roofArea === null ? '' : ' Раскладку уточняют по форме и размерам ската.';
   element('result-note').textContent = `Источник · ${climate.source}. Тень от зданий и деревьев требует проверки на месте.${roofNote}`;
   element('result-method').textContent = [
     `Один модуль Delta PV TOP даёт 500 Вт номинальной мощности. Площадь модулей ${format(data.panelArea, 1)} м² без креплений и проходов.`,
     inputs.roofArea === null ? '' : `Площадь одного модуля ${format(PANEL.squareMeters, 3)} м². В свободной зоне ${format(inputs.roofArea, 2)} м² по площади помещается до ${format(inputs.roofCapacity)} шт.`,
     `В расчёте наклон ${inputs.tilt}°, направление — ${inputs.direction}, потери системы ${format(SYSTEM_LOSS * 100)}%.`,
-    data.saving === null ? '' : `Модель предполагает, что объект использует ${format(SELF_USE * 100)}% выработки, в пределах среднего потребления по счёту за месяц. Оценка собственного потребления ${format(data.used)} кВт·ч в год. Доходы от продажи в сеть исключены из расчёта.`,
-    data.payback === null ? '' : 'Простая окупаемость равна цене с монтажом, делённой на годовую экономию. Тариф принят постоянным.'
+    data.saving === null ? '' : `В расчёте ${format(inputs.selfUse * 100, 1)}% выработки идёт на свои нужды в пределах среднего потребления за месяц. Это около ${format(data.used)} кВт·ч в год. Экономия на счёте около ${format(data.grossSaving)} ₽ в год.`,
+    !industry || data.saving === null ? '' : `Из экономии вычтены расходы на обслуживание ${format(inputs.maintenance)} ₽ в год.`,
+    data.payback === null ? '' : 'Простая окупаемость равна цене с монтажом, делённой на годовую экономию после расходов. Тариф принят постоянным.'
   ].filter(Boolean).join(' ');
   drawChart(data.monthly);
   results.hidden = false;
@@ -498,9 +580,10 @@ form.addEventListener('input', event => {
 element('demo').addEventListener('click', () => {
   form.reset();
   choosePoint(initialLocation, { syncAddress: true });
-  element('bill').value = '5 000';
-  element('tariff').value = '6,00';
-  element('roof-area').value = '30';
+  const values = industry
+    ? { 'roof-area': '1 800', tilt: '15', consumption: '90 000', tariff: '9,50', 'self-use': '85', cost: '18 000 000', maintenance: '250 000' }
+    : { 'roof-area': '30', battery: '10', 'backup-load': '500', inverter: '3', bill: '5 000', tariff: '6,00', cost: '450 000' };
+  for (const [id, value] of Object.entries(values)) element(id).value = value;
   for (const field of form.querySelectorAll('[aria-invalid]')) field.removeAttribute('aria-invalid');
   updateStationSummary();
   calculateResult(true);
@@ -510,4 +593,8 @@ element('edit').addEventListener('click', () => {
   address.focus({ preventScroll: true });
   form.scrollIntoView({ behavior: reduceMotion.matches ? 'instant' : 'smooth', block: 'start' });
 });
+if (backupMonth) {
+  backupMonth.value = String(new Date().getMonth());
+  backupMonth.addEventListener('change', updateDailyEstimate);
+}
 updateStationSummary();
