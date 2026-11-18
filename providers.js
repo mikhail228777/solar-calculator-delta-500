@@ -126,7 +126,7 @@ export async function searchAddresses(query, signal) {
   if (addressCache.has(key)) return addressCache.get(key);
 
   const url = new URL(PHOTON);
-  url.search = new URLSearchParams({ q: query, lang: 'ru', limit: '5', countrycode: 'RU' });
+  url.search = new URLSearchParams({ q: query, limit: '5', countrycode: 'RU' });
   const data = await jsonFrom(url, signal);
   if (!Array.isArray(data?.features)) throw new Error('Photon: неожиданный ответ');
 

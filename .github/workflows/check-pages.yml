@@ -33,17 +33,23 @@ jobs:
 
           const site = new URL(process.env.SITE_URL);
           const commit = process.env.GITHUB_SHA;
-          const source = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/index.html`;
-          const original = await fetch(source, { signal: AbortSignal.timeout(10000) });
-          assert.ok(original.ok, `GitHub source: HTTP ${original.status}`);
-          const expected = await original.text();
+          const files = [['index.html', ''], ['app.js', 'app.js'], ['providers.js', 'providers.js']];
+          const expected = await Promise.all(files.map(async ([sourcePath, publishedPath]) => {
+            const source = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/${sourcePath}`;
+            const original = await fetch(source, { signal: AbortSignal.timeout(10000) });
+            assert.ok(original.ok, `${sourcePath}: HTTP ${original.status}`);
+            const published = new URL(publishedPath, site);
+            published.searchParams.set('revision', commit);
+            return [published, await original.text()];
+          }));
 
-          const page = new URL(site);
-          page.searchParams.set('revision', commit);
           for (let attempt = 0; attempt < 18; attempt += 1) {
-            const served = await fetch(page, { signal: AbortSignal.timeout(5000) }).catch(() => null);
-            if (served?.ok && await served.text() === expected) break;
-            assert.ok(attempt < 17, `Pages did not serve ${commit.slice(0, 7)} (last HTTP ${served?.status ?? 'unavailable'})`);
+            const matches = await Promise.all(expected.map(async ([published, original]) => {
+              const served = await fetch(published, { signal: AbortSignal.timeout(5000) }).catch(() => null);
+              return served?.ok && await served.text() === original;
+            }));
+            if (matches.every(Boolean)) break;
+            assert.ok(attempt < 17, `Pages did not serve HTML and scripts for ${commit.slice(0, 7)}`);
             await setTimeout(5000);
           }
           const data = await fetch(new URL('data/nasa-power-climatology.json', site), { signal: AbortSignal.timeout(10000) });
@@ -60,10 +66,13 @@ jobs:
           const origin = new URL(process.env.SITE_URL).origin;
           const endpoint = new URL('https://photon.komoot.io/api/');
           endpoint.search = new URLSearchParams({
-            q: 'Ростов-на-Дону, Большая Садовая улица', countrycode: 'RU', limit: '5', lang: 'ru'
+            q: 'Ростов-на-Дону, Большая Садовая улица', countrycode: 'RU', limit: '5'
           });
-          const reply = await fetch(endpoint, { headers: { Origin: origin }, signal: AbortSignal.timeout(16000) });
-          assert.ok(reply.ok, `Photon: HTTP ${reply.status}`);
+          const reply = await fetch(endpoint, {
+            headers: { Origin: origin, 'Accept-Language': 'ru-RU,ru;q=0.9,en;q=0.5' },
+            signal: AbortSignal.timeout(16000)
+          });
+          if (!reply.ok) throw new Error(`Photon: HTTP ${reply.status}: ${(await reply.text()).slice(0, 300)}`);
           assert.ok(['*', origin].includes(reply.headers.get('access-control-allow-origin')), 'Photon did not permit the GitHub Pages origin.');
           const { features } = await reply.json();
           assert.ok(features?.some(feature => {

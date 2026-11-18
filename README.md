@@ -4,7 +4,7 @@
 
 | Данные | Источник |
 | --- | --- |
-| Поиск адреса | [Photon](https://photon.komoot.io/), `GET https://photon.komoot.io/api/?q=…&countrycode=RU&limit=5&lang=ru`. Запрос отправляется по кнопке. Точность зависит от покрытия OpenStreetMap. Для публичной версии можно выбрать собственный Photon или договорной геокодер с адресами по России. |
+| Поиск адреса | [Photon](https://photon.komoot.io/), `GET https://photon.komoot.io/api/?q=…&countrycode=RU&limit=5`. Запрос отправляется по кнопке. Точность зависит от покрытия OpenStreetMap. Для публичной версии можно выбрать собственный Photon или договорной геокодер с адресами по России. |
 | Карта | [OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/), `https://tile.openstreetmap.org/{z}/{x}/{y}.png`. [Leaflet](https://leafletjs.com/) рисует карту и перемещаемую метку. Спутниковое изображение открывается в Яндекс Картах по ссылке с координатами. |
 | Солнечное излучение | [NASA POWER Climatology API](https://power.larc.nasa.gov/docs/services/api/temporal/climatology/), `GET https://power.larc.nasa.gov/api/temporal/climatology/point`, `community=RE`, `parameters=ALLSKY_SFC_SW_DWN`, `latitude`, `longitude`, `format=JSON`. Для внешнего запроса используются координаты центра ячейки сетки 1°. |
 | Автоматический анализ крыши | [Google Solar API Building Insights](https://developers.google.com/maps/documentation/solar/building-insights) может дать характеристики крыши при подтверждённом [покрытии](https://developers.google.com/maps/documentation/solar/coverage) и доступе к API. Дополнительный сервис для отдельного этапа проекта. |
@@ -21,7 +21,7 @@
 
 ## Проверка
 
-Расчёт для Ростова и Москвы проверен в Chromium на встроенных архивных данных. Разбор ответов Photon и NASA и восстановление при недоступности карты проверены на подменённых ответах. Прямые запросы из рабочей среды к Photon, плиткам OpenStreetMap и NASA POWER остановил сетевой фильтр до обращения к сервисам.
+Расчёт для Ростова и Москвы проверен в Chromium на встроенных архивных данных. GitHub Actions проверяет публичную страницу, архив NASA и ответы Photon, OpenStreetMap и NASA POWER. Итог каждого запроса виден на вкладке Actions.
 
 ## Публикация на GitHub Pages
 
