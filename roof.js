@@ -2,8 +2,9 @@ import { calculateSolar } from './solar.js?v=2';
 import { loadClimate, localCity, searchAddresses } from './providers.js';
 import {
   layoutPanels, manualRect, optimalTilt, rectCenter, rectCorners, rectFromPoints, resizeRect,
-  winterNoonElevation, PANEL_KW, PANEL_LONG
-} from './geometry.js?v=1';
+  toLocal, winterNoonElevation, PANEL_KW, PANEL_LONG
+} from './geometry.js?v=2';
+import { createMapView } from './map-view.js?v=1';
 
 // Conditional inputs for the demo. Replace with the regional tariff table and the price list.
 const MODES = {
@@ -30,7 +31,6 @@ const $ = id => document.getElementById(id);
 const fmt = (value, digits = 0) => value.toLocaleString('ru-RU', { maximumFractionDigits: digits });
 const money = value => fmt(Math.round(value / (Math.abs(value) >= 10000 ? 100 : 10)) * (Math.abs(value) >= 10000 ? 100 : 10));
 const energy = value => fmt(value >= 1000 ? Math.round(value / 10) * 10 : Math.round(value));
-const latLng = point => ({ lat: point.lat, lng: point.lng });
 const escapeHtml = text => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
 
 function plural(value, [one, few, many]) {
@@ -73,37 +73,8 @@ const state = {
 };
 
 // ---------- Map ----------
-const map = L.map('map', {
-  center: [START.lat, START.lng], zoom: 12, maxZoom: 21, doubleClickZoom: false,
-  scrollWheelZoom: false, worldCopyJump: true
-});
-map.attributionControl.setPrefix(false);
-
-const imagery = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', {
-  maxNativeZoom: 19, maxZoom: 21, attribution: 'Снимки © Esri, Maxar, Earthstar Geographics'
-});
-const places = L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/Reference/World_Boundaries_and_Places/MapServer/tile/{z}/{y}/{x}', {
-  maxNativeZoom: 19, maxZoom: 21, zIndex: 2
-});
-const scheme = L.tileLayer('https://tile.openstreetmap.org/{z}/{x}/{y}.png', {
-  maxNativeZoom: 19, maxZoom: 21, attribution: '© <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a>'
-});
-const satellite = L.layerGroup([imagery, places]).addTo(map);
-L.control.layers({ 'Спутник': satellite, 'Схема': scheme }, null, { position: 'topright' }).addTo(map);
-
-map.on('click', () => map.scrollWheelZoom.enable());
-map.on('mouseout', () => map.scrollWheelZoom.disable());
-
-const shapes = L.layerGroup().addTo(map);
-const panelLayer = L.layerGroup().addTo(map);
-const panelRenderer = L.canvas({ padding: 0.4 });
-const cornerIcon = L.divIcon({ className: 'corner-wrap', html: '<div class="corner"></div>', iconSize: [44, 44], iconAnchor: [22, 22] });
-const hereIcon = L.divIcon({ className: '', html: '<div class="here"></div>', iconSize: [0, 0] });
-const labelIcon = (text, className) => L.divIcon({ className, html: `<span>${text}</span>`, iconSize: [0, 0] });
-let handles = [];
-let draggingHandle = -1;
-let preview = null;
-let here = null;
+// The map view is created once the Yandex (or fallback) API has loaded; until then it is null.
+let view = null;
 
 function setHint(text) {
   $('draw-hint').textContent = text;
@@ -113,7 +84,7 @@ function updateHint() {
   if (state.rect) setHint('Готово! Белые точки можно перетащить, чтобы точнее совпасть с краями крыши.');
   else if (state.points.length === 2) setHint('Теперь нажмите на противоположный край крыши — это линия Б.');
   else if (state.points.length === 1) setHint('Нажмите на соседний угол — получится линия А.');
-  else if (map.getZoom() < DRAW_MIN_ZOOM) setHint('Приблизьте карту к своему дому.');
+  else if (!view || view.getZoom() < DRAW_MIN_ZOOM) setHint('Приблизьте карту к своему дому.');
   else setHint('Нажмите на угол крыши — это начало линии А.');
 }
 
@@ -130,33 +101,24 @@ function handlePositions() {
 }
 
 function syncHandles() {
-  const positions = handlePositions();
-  while (handles.length > positions.length) map.removeLayer(handles.pop());
-  positions.forEach((position, index) => {
-    if (!handles[index]) {
-      const marker = L.marker(position, { draggable: true, icon: cornerIcon, keyboard: false, autoPan: true, zIndexOffset: 1000 });
-      marker.on('dragstart', () => { draggingHandle = index; });
-      marker.on('drag', () => onHandleDrag(index));
-      marker.on('dragend', () => {
-        draggingHandle = -1;
-        syncHandles();
-        roofChanged();
-      });
-      handles[index] = marker.addTo(map);
-    } else if (draggingHandle !== index) {
-      handles[index].setLatLng(position);
+  view?.handles(handlePositions(), {
+    drag: onHandleDrag,
+    dragEnd: () => {
+      syncHandles();
+      roofChanged();
     }
   });
 }
 
 let dragFrame = 0;
-function onHandleDrag(index) {
-  const positions = handles.map(handle => latLng(handle.getLatLng()));
+function onHandleDrag(index, position) {
   if (state.rect) {
+    const positions = handlePositions().slice();
+    positions[index] = position;
     const rect = rectFromPoints(positions[0], positions[1], positions[2]);
     if (rect) state.rect = rect;
   } else {
-    state.points[index] = positions[index];
+    state.points[index] = position;
   }
   if (dragFrame) return;
   dragFrame = requestAnimationFrame(() => {
@@ -167,45 +129,51 @@ function onHandleDrag(index) {
   });
 }
 
-function midpoint(p, q) {
-  return [(p.lat + q.lat) / 2, (p.lng + q.lng) / 2];
-}
+const midpoint = (p, q) => ({ lat: (p.lat + q.lat) / 2, lng: (p.lng + q.lng) / 2 });
+const distance = (p, q) => {
+  const d = toLocal(p, q);
+  return Math.hypot(d.x, d.y);
+};
 
 function redraw() {
-  shapes.clearLayers();
+  if (!view) return;
   if (state.rect) {
     const corners = rectCorners(state.rect);
-    L.polygon(corners, { color: '#ffb27a', weight: 2, dashArray: '6 5', fillColor: '#d9621a', fillOpacity: 0.12, interactive: false }).addTo(shapes);
-    L.polyline([corners[0], corners[1]], { color: '#ff8a3d', weight: 4, interactive: false }).addTo(shapes);
-    L.polyline([corners[1], corners[2]], { color: '#ffd166', weight: 4, interactive: false }).addTo(shapes);
-    L.marker(midpoint(corners[0], corners[1]), { icon: labelIcon(`А · ${fmt(state.rect.a, 1)} м`, 'edge-label'), interactive: false, keyboard: false }).addTo(shapes);
-    L.marker(midpoint(corners[1], corners[2]), { icon: labelIcon(`Б · ${fmt(state.rect.b, 1)} м`, 'edge-label'), interactive: false, keyboard: false }).addTo(shapes);
+    view.draw({
+      polygons: [{ points: corners, kind: 'roof' }],
+      lines: [{ points: [corners[0], corners[1]], kind: 'lineA' }, { points: [corners[1], corners[2]], kind: 'lineB' }],
+      labels: [
+        { point: midpoint(corners[0], corners[1]), text: `А · ${fmt(state.rect.a, 1)} м` },
+        { point: midpoint(corners[1], corners[2]), text: `Б · ${fmt(state.rect.b, 1)} м` }
+      ]
+    });
   } else if (state.points.length === 2) {
     const [first, second] = state.points;
-    L.polyline([first, second], { color: '#ff8a3d', weight: 4, interactive: false }).addTo(shapes);
-    L.marker(midpoint(first, second), { icon: labelIcon(`А · ${fmt(map.distance(first, second), 1)} м`, 'edge-label'), interactive: false, keyboard: false }).addTo(shapes);
+    view.draw({
+      lines: [{ points: [first, second], kind: 'lineA' }],
+      labels: [{ point: midpoint(first, second), text: `А · ${fmt(distance(first, second), 1)} м` }]
+    });
+  } else {
+    view.draw({});
   }
 }
 
 function clearPreview() {
-  if (preview) map.removeLayer(preview);
-  preview = null;
+  view?.preview(null);
 }
 
-map.on('mousemove', event => {
+function onMapMove(position) {
   if (state.rect || !state.points.length) return clearPreview();
-  const last = state.points[state.points.length - 1];
-  if (!preview) preview = L.polyline([last, event.latlng], { color: '#ffffff', weight: 2, dashArray: '4 6', interactive: false }).addTo(map);
-  else preview.setLatLngs([last, event.latlng]);
-});
+  view.preview([state.points[state.points.length - 1], position]);
+}
 
-map.on('click', event => {
+function onMapClick(position) {
   if (state.rect) return;
-  if (map.getZoom() < DRAW_MIN_ZOOM) {
+  if (view.getZoom() < DRAW_MIN_ZOOM) {
     setHint('Сначала приблизьте карту к дому — так углы встанут точнее.');
     return;
   }
-  state.points.push(latLng(event.latlng));
+  state.points.push(position);
   if (state.points.length === 3) {
     const rect = rectFromPoints(...state.points);
     if (!rect) {
@@ -221,9 +189,7 @@ map.on('click', event => {
   updateHint();
   updateTools();
   if (state.rect) roofChanged();
-});
-
-map.on('zoomend', updateHint);
+}
 
 $('undo').addEventListener('click', () => {
   if (state.rect) {
@@ -271,8 +237,8 @@ function typedDims() {
   if (state.rect) {
     state.rect = resizeRect(state.rect, a, b);
   } else {
-    state.rect = manualRect(latLng(map.getCenter()), a, b);
-    map.fitBounds(L.latLngBounds(rectCorners(state.rect)), { padding: [40, 40], maxZoom: 20 });
+    state.rect = manualRect(view ? view.getCenter() : START, a, b);
+    view?.fitPoints(rectCorners(state.rect));
   }
   state.points = handlePositions();
   syncHandles();
@@ -296,8 +262,7 @@ function flatNote(lat) {
 }
 
 function updateLayout() {
-  panelLayer.clearLayers();
-  const lat = state.rect ? rectCenter(state.rect).lat : map.getCenter().lat;
+  const lat = state.rect ? rectCenter(state.rect).lat : (view ? view.getCenter().lat : START.lat);
   $('flat-note').textContent = flatNote(lat);
   if (!state.rect) {
     state.layout = null;
@@ -316,17 +281,13 @@ function updateLayout() {
 
 // Panels of the chosen station are solid; the rest of the roof's capacity is outlined.
 function drawPanels() {
-  panelLayer.clearLayers();
-  if (!state.layout) return;
+  if (!state.layout) {
+    view?.panels([], []);
+    return;
+  }
   const solid = state.chosen ?? state.layout.count;
-  state.layout.panels.slice(0, MAX_DRAWN_PANELS).forEach((panel, index) => {
-    const used = index < solid;
-    L.polygon(panel, {
-      renderer: panelRenderer, interactive: false, color: used ? '#a9bde0' : '#ffffff',
-      weight: used ? 0.7 : 1, opacity: used ? 1 : 0.6, dashArray: used ? null : '3 3',
-      fillColor: '#1b2a4a', fillOpacity: used ? 0.92 : 0.12
-    }).addTo(panelLayer);
-  });
+  const panels = state.layout.panels.slice(0, MAX_DRAWN_PANELS);
+  view?.panels(panels.slice(0, solid), panels.slice(solid));
 }
 
 let recalcTimer = 0;
@@ -351,17 +312,12 @@ function status(text, bad = false) {
   element.classList.toggle('bad', bad);
 }
 
-function showHere(point) {
-  if (here) map.removeLayer(here);
-  here = L.marker([point.lat, point.lng], { icon: hereIcon, interactive: false, keyboard: false }).addTo(map);
-}
-
 // Phones get one extra zoom step so that a finger can hit the corners of a small roof.
 const closeZoom = () => (window.innerWidth < 600 ? 20 : 19);
 
 function goTo(point, zoom) {
-  map.setView([point.lat, point.lng], zoom);
-  showHere(point);
+  view?.setView(point, zoom);
+  view?.here(point);
   updateHint();
   updateLayout();
   $('step-roof').scrollIntoView({ behavior: 'smooth', block: 'start' });
@@ -691,7 +647,7 @@ function renderResult({ result, layout, count, capacity, needed, recommended, co
   drawChart();
   $('show-map').addEventListener('click', () => {
     $('step-roof').scrollIntoView({ behavior: 'smooth', block: 'start' });
-    map.fitBounds(L.latLngBounds(rectCorners(state.rect)), { padding: [40, 40], maxZoom: 20 });
+    view?.fitPoints(rectCorners(state.rect));
   });
   $('share').addEventListener('click', share);
 }
@@ -837,10 +793,7 @@ function restore() {
     .map(([lat, lng]) => ({ lat, lng }));
   if (points.length === 3) {
     state.rect = rectFromPoints(...points);
-    if (state.rect) {
-      state.points = handlePositions();
-      map.fitBounds(L.latLngBounds(rectCorners(state.rect)), { padding: [40, 40], maxZoom: 20 });
-    }
+    if (state.rect) state.points = handlePositions();
   }
   return { ready: Boolean(state.rect && (state.bill || state.houseArea)), panels };
 }
@@ -853,16 +806,36 @@ $('count-range').addEventListener('input', () => {
 });
 
 // ---------- Start ----------
-const restored = restore();
-syncRoofControls();
-syncModeControls();
-updateAreaEstimate();
-syncHandles();
-redraw();
-updateHint();
-updateTools();
-roofChanged();
-if (restored.ready) {
-  state.panels = restored.panels && Math.round(restored.panels);
-  calculate({ scroll: false });
+async function start() {
+  const restored = restore();
+  syncRoofControls();
+  syncModeControls();
+  updateAreaEstimate();
+  updateDims();
+  updateLayout();
+  updateTools();
+  try {
+    view = await createMapView($('map'), { center: START, zoom: 12 });
+  } catch (error) {
+    console.error(error);
+    $('map').textContent = 'Карта не загрузилась. Введите длину и ширину крыши вручную.';
+  }
+  document.documentElement.dataset.map = view?.provider ?? 'none';
+  $('map-note').hidden = view?.provider !== 'esri';
+  if (view) {
+    view.onClick(onMapClick);
+    view.onMove(onMapMove);
+    view.onZoom(updateHint);
+    if (state.rect) view.fitPoints(rectCorners(state.rect));
+  }
+  syncHandles();
+  redraw();
+  updateHint();
+  roofChanged();
+  if (restored.ready) {
+    state.panels = restored.panels && Math.round(restored.panels);
+    calculate({ scroll: false });
+  }
 }
+
+start();

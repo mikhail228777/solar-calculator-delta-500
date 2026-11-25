@@ -12,6 +12,8 @@ on:
       - 'roof.js'
       - 'roof.css'
       - 'geometry.js'
+      - 'config.js'
+      - 'map-*.js'
       - 'methodology.*'
       - 'app.js'
       - 'calculator-template.js'
@@ -44,7 +46,8 @@ jobs:
           const site = new URL(process.env.SITE_URL);
           const commit = process.env.GITHUB_SHA;
           const files = ['index.html', 'home.html', 'industry.html', 'methodology.html', 'app.js',
-            'calculator-template.js', 'providers.js', 'solar.js', 'style.css', 'roof.js', 'roof.css', 'geometry.js'];
+            'calculator-template.js', 'providers.js', 'solar.js', 'style.css', 'roof.js', 'roof.css', 'geometry.js',
+            'config.js', 'map-view.js', 'map-yandex.js', 'map-leaflet.js'];
           const expected = await Promise.all(files.map(async sourcePath => {
             const source = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/${sourcePath}`;
             const original = await fetch(source, { signal: AbortSignal.timeout(10000) });

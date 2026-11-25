@@ -1,0 +1,81 @@
+name: Map preview
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [main]
+    paths:
+      - '.github/workflows/map-preview.yml'
+      - 'index.html'
+      - 'roof.js'
+      - 'roof.css'
+      - 'config.js'
+      - 'map-*.js'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: map-preview
+  cancel-in-progress: true
+
+env:
+  SITE_URL: https://mikhail228777.github.io/solar-calculator-delta-500/
+
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - name: Open the published calculator in Chrome and report which imagery the map shows
+        run: |
+          mkdir preview && cd preview
+          npm install --silent --no-audit --no-fund puppeteer-core@23.11.1
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          import { setTimeout as wait } from 'node:timers/promises';
+          import puppeteer from 'puppeteer-core';
+
+          const site = new URL(process.env.SITE_URL);
+          const commit = process.env.GITHUB_SHA;
+          const files = ['roof.js', 'map-view.js', 'map-yandex.js', 'config.js'];
+          const sources = await Promise.all(files.map(file =>
+            fetch(`https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/${file}`).then(reply => reply.text())));
+          for (let attempt = 0; ; attempt += 1) {
+            const served = await Promise.all(files.map(file =>
+              fetch(new URL(`${file}?revision=${commit}`, site)).then(reply => (reply.ok ? reply.text() : '')).catch(() => '')));
+            if (served.every((text, index) => text === sources[index])) break;
+            assert.ok(attempt < 30, 'Pages did not serve the map scripts for this commit.');
+            await wait(5000);
+          }
+
+          const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
+          const page = await browser.newPage();
+          await page.setViewport({ width: 412, height: 860, isMobile: true, hasTouch: true });
+          const notes = [];
+          page.on('console', message => {
+            if (['error', 'warn', 'warning'].includes(message.type())) notes.push(`${message.type()}: ${message.text().slice(0, 200)}`);
+          });
+          page.on('requestfailed', request => notes.push(`failed: ${request.url().slice(0, 140)} ${request.failure()?.errorText ?? ''}`));
+          page.on('response', reply => {
+            if (reply.status() >= 400) notes.push(`HTTP ${reply.status()}: ${reply.url().slice(0, 140)}`);
+          });
+
+          const target = new URL(site);
+          target.searchParams.set('revision', commit);
+          target.hash = 'r=47.2225600,39.7103500;47.2225600,39.7109500;47.2222600,39.7109500&roof=pitched&az=180&tilt=30&mode=home&bill=5000';
+          await page.goto(target.href, { waitUntil: 'networkidle2', timeout: 60000 });
+          await page.waitForFunction(() => document.documentElement.dataset.map, { timeout: 30000 });
+          await wait(8000);
+          const provider = await page.evaluate(() => document.documentElement.dataset.map);
+          console.log(`Map provider: ${provider}`);
+          console.log(notes.slice(0, 40).join('\n') || 'No console errors or failed requests.');
+
+          const map = await page.$('#map');
+          const shot = Buffer.from(await map.screenshot({ type: 'jpeg', quality: 60 })).toString('base64');
+          console.log('PREVIEW-BEGIN');
+          for (let index = 0; index < shot.length; index += 4000) console.log(shot.slice(index, index + 4000));
+          console.log('PREVIEW-END');
+          await browser.close();
+          assert.ok(['yandex', 'esri'].includes(provider), `The map did not load (${provider}).`);
+          JS

@@ -22,7 +22,7 @@
 | Данные | Источник |
 | --- | --- |
 | Поиск адреса | [Photon](https://photon.komoot.io/), `GET https://photon.komoot.io/api/?q=…&countrycode=RU&limit=5`. Запрос отправляется по кнопке. Точность зависит от покрытия OpenStreetMap. Для публичной версии можно выбрать собственный Photon или договорной геокодер с адресами по России. |
-| Спутниковый снимок | [Esri World Imagery](https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9), `https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}`, и подписи `Reference/World_Boundaries_and_Places`. На основной странице. Для коммерческого запуска нужен ключ ArcGIS Location Platform: бесплатно 1000 сессий в месяц. |
+| Спутниковый снимок | [JavaScript API 2.1 Яндекс Карт](https://yandex.ru/dev/jsapi-v2-1/doc/ru/), тип карты `yandex#hybrid` (снимок с подписями улиц). У Яндекса самые свежие снимки российских городов. Бесплатная версия разрешена для открытых сайтов. Ключ задаётся в `config.js`: его выдают в [кабинете разработчика](https://developer.tech.yandex.ru/), а в настройках ключа указывают домены сайта. Если Яндекс не загрузился, `map-view.js` переключается на Leaflet со снимками [Esri World Imagery](https://www.arcgis.com/home/item.html?id=10df2279f9684e4a9f6a7f08febac2a9) и показывает под картой предупреждение, что снимки могут быть старыми. |
 | Карта | [OpenStreetMap](https://operations.osmfoundation.org/policies/tiles/), `https://tile.openstreetmap.org/{z}/{x}/{y}.png`. [Leaflet](https://leafletjs.com/) рисует карту и перемещаемую метку. На основной странице доступна как слой «Схема». |
 | Солнечное излучение | [NASA POWER Climatology API](https://power.larc.nasa.gov/docs/services/api/temporal/climatology/), `GET https://power.larc.nasa.gov/api/temporal/climatology/point`, `community=RE`, `parameters=ALLSKY_SFC_SW_DWN`, `latitude`, `longitude`, `format=JSON`. Для внешнего запроса используются координаты центра ячейки сетки 1°. |
 | Площадь, потребление, тариф и цена | Пользователь вводит свободную площадь или фактическое число панелей, а также тариф, потребление и стоимость. Параметры примеров обозначены как условные. |
@@ -40,6 +40,8 @@
 Простая окупаемость равна цене с монтажом, делённой на годовую экономию после обслуживания. Резерв для дома рассчитывается по ёмкости, начальному заряду и средней нагрузке с КПД разряда 90%. Суточная выработка показывается отдельно по выбранному месяцу. Подробные формулы и примеры приведены в [методике](./methodology.html).
 
 ## Проверка
+
+Workflow «Map preview» открывает опубликованную страницу в Chrome и пишет в лог, какая карта загрузилась (`yandex` или `esri`). Там же — снимок карты в base64 между строками `PREVIEW-BEGIN` и `PREVIEW-END`.
 
 GitHub Actions проверяет публикацию всех страниц и методики. Он сверяет числовые результаты примеров на архивных данных, раскладку панелей на крыше 10 × 10 м и ответы Photon, Esri, OpenStreetMap и NASA POWER. Итог каждого запроса виден на вкладке Actions.
 
