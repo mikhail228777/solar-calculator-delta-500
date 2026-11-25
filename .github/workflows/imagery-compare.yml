@@ -1,0 +1,141 @@
+name: Compare satellite imagery
+
+# Research tool: photographs the same places in Rostov-on-Don on several satellite maps and
+# asks Esri for the capture date, to see whose imagery shows recent construction.
+on:
+  workflow_dispatch:
+  push:
+    branches: [ccr-db917492-zv4er7]
+    paths:
+      - '.github/workflows/imagery-compare.yml'
+
+permissions:
+  contents: read
+
+jobs:
+  compare:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Photograph places on Yandex, Esri, Google and Bing
+        run: |
+          mkdir compare && cd compare
+          cat > yandex.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><style>html,body,#m{margin:0;width:100%;height:100%}</style>
+          <div id="m"></div>
+          <script src="https://api-maps.yandex.ru/2.1/?lang=ru_RU"></script>
+          <script>
+            const q = new URLSearchParams(location.search);
+            ymaps.ready(() => {
+              const map = new ymaps.Map('m', { center: [+q.get('lat'), +q.get('lng')], zoom: +q.get('z'), type: 'yandex#satellite', controls: [] });
+              setTimeout(() => { document.title = 'ready'; }, 6000);
+            });
+          </script>
+          HTML
+          cat > esri.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><style>html,body,#m{margin:0;width:100%;height:100%}</style>
+          <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css">
+          <div id="m"></div>
+          <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+          <script>
+            const q = new URLSearchParams(location.search);
+            const map = L.map('m', { zoomControl: false }).setView([+q.get('lat'), +q.get('lng')], +q.get('z'));
+            L.tileLayer('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}', { maxNativeZoom: 19 }).addTo(map);
+            setTimeout(() => { document.title = 'ready'; }, 4000);
+          </script>
+          HTML
+          python3 -m http.server 8099 >/dev/null 2>&1 &
+          npm install --silent --no-audit --no-fund puppeteer-core@23.11.1
+          node --input-type=module <<'JS'
+          import { setTimeout as wait } from 'node:timers/promises';
+          import puppeteer from 'puppeteer-core';
+
+          const places = [
+            { name: 'Ростов-Арена, построена в 2018 (контроль)', lat: 47.2094, lng: 39.7377, z: 16 },
+            { name: 'Новый Ростов на месте старого аэропорта, стройка 2021–2026', lat: 47.2582, lng: 39.8181, z: 15 },
+            { name: 'Школа № 74, ул. Платона Кляты, открыта в 2025', query: 'улица Платона Кляты' , z: 16 },
+            { name: 'Корпус школы № 32, ул. Дмитрия Петрова, открыт в 2025', query: 'улица Дмитрия Петрова', z: 16 },
+            { name: 'Квартал «Левобережье», детсад «Причал 23», 2024', query: 'Левобережная улица', z: 16 },
+            { name: 'Вертолётное поле, стройка, школа 2026', query: 'Вертолётное поле', z: 16 },
+            { name: 'Центр Ростова, точка с проверочного снимка', lat: 47.2224, lng: 39.7107, z: 17 }
+          ];
+
+          for (const place of places) {
+            if (place.lat) continue;
+            const url = new URL('https://photon.komoot.io/api/');
+            url.search = new URLSearchParams({ q: `${place.query}, Ростов-на-Дону`, limit: '1', lat: '47.23', lon: '39.72' });
+            const found = (await fetch(url).then(reply => reply.json()).catch(() => null))?.features?.[0];
+            if (found) {
+              [place.lng, place.lat] = found.geometry.coordinates;
+              place.where = [found.properties.name, found.properties.street, found.properties.city].filter(Boolean).join(', ');
+            }
+          }
+
+          async function esriDate(place) {
+            const url = new URL('https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata/MapServer/identify');
+            url.search = new URLSearchParams({
+              geometry: JSON.stringify({ x: place.lng, y: place.lat, spatialReference: { wkid: 4326 } }),
+              geometryType: 'esriGeometryPoint', sr: '4326', layers: 'all', tolerance: '1',
+              mapExtent: `${place.lng - 0.01},${place.lat - 0.01},${place.lng + 0.01},${place.lat + 0.01}`,
+              imageDisplay: '500,400,96', returnGeometry: 'false', f: 'json'
+            });
+            const reply = await fetch(url).then(r => r.json()).catch(error => ({ error: String(error) }));
+            if (!reply.results) return `metadata error: ${JSON.stringify(reply).slice(0, 200)}`;
+            return reply.results.map(r => {
+              const a = r.attributes;
+              return `levels ${a.MIN_MAPLEV ?? a['Min Map Level'] ?? '?'}-${a.MAX_MAPLEV ?? a['Max Map Level'] ?? '?'}: date ${a.SRC_DATE ?? a['Source Date'] ?? '?'}, ${a.SRC_RES ?? a['Source Resolution'] ?? '?'} m, ${a.NICE_DESC ?? a['Description'] ?? a.SRC_DESC ?? ''}`;
+            }).join(' | ');
+          }
+
+          const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox', '--lang=ru-RU'] });
+          const page = await browser.newPage();
+          await page.setViewport({ width: 500, height: 400 });
+
+          function dump(label, buffer) {
+            const text = Buffer.from(buffer).toString('base64');
+            console.log(`IMG ${label}`);
+            for (let i = 0; i < text.length; i += 4000) console.log(text.slice(i, i + 4000));
+            console.log('IMG-END');
+          }
+
+          const providers = {
+            yandex: p => `http://localhost:8099/yandex.html?lat=${p.lat}&lng=${p.lng}&z=${p.z}`,
+            esri: p => `http://localhost:8099/esri.html?lat=${p.lat}&lng=${p.lng}&z=${p.z}`,
+            google: p => `https://maps.google.com/maps?ll=${p.lat},${p.lng}&t=k&z=${p.z}&output=embed&hl=ru`,
+            bing: p => `https://www.bing.com/maps/embed?h=400&w=500&cp=${p.lat}~${p.lng}&lvl=${p.z}&typ=d&sty=a&src=SHELL&FORM=MBEDV8`
+          };
+
+          for (const [index, place] of places.entries()) {
+            console.log(`PLACE ${index}: ${place.name} | ${place.lat?.toFixed(5)}, ${place.lng?.toFixed(5)} | ${place.where ?? 'координаты заданы вручную'}`);
+            if (!place.lat) continue;
+            console.log(`ESRI-DATE ${index}: ${await esriDate(place)}`);
+            for (const [provider, url] of Object.entries(providers)) {
+              try {
+                await page.goto(url(place), { waitUntil: 'networkidle2', timeout: 45000 });
+                await wait(provider === 'yandex' ? 7000 : 5000);
+                dump(`${index} ${provider}`, await page.screenshot({ type: 'jpeg', quality: 55 }));
+              } catch (error) {
+                console.log(`FAIL ${index} ${provider}: ${String(error).slice(0, 200)}`);
+              }
+            }
+          }
+
+          // The People's Map editor shows the date of Yandex imagery in its corner.
+          const big = await browser.newPage();
+          await big.setViewport({ width: 1200, height: 800 });
+          for (const index of [1, 2, 6]) {
+            const place = places[index];
+            if (!place.lat) continue;
+            try {
+              await big.goto(`https://n.maps.yandex.ru/#!/?z=${place.z}&ll=${place.lng}%2C${place.lat}&l=nk%23sat`, { waitUntil: 'networkidle2', timeout: 60000 });
+              await wait(8000);
+              const lines = (await big.evaluate(() => document.body.innerText)).split('\n')
+                .filter(line => /снимк|съемк|съёмк|\b20\d\d\b|\b19\d\d\b/i.test(line)).slice(0, 15);
+              console.log(`NMAPS ${index}: ${lines.join(' || ') || 'нет строк с датой'}`);
+              dump(`${index} nmaps`, await big.screenshot({ type: 'jpeg', quality: 50 }));
+            } catch (error) {
+              console.log(`FAIL ${index} nmaps: ${String(error).slice(0, 200)}`);
+            }
+          }
+          await browser.close();
+          JS
