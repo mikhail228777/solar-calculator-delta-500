@@ -44,6 +44,13 @@ jobs:
             setTimeout(() => { document.title = 'ready'; }, 4000);
           </script>
           HTML
+          cat > google.html <<'HTML'
+          <!doctype html><meta charset="utf-8"><style>html,body{margin:0}iframe{border:0;width:500px;height:400px}</style>
+          <script>
+            const q = new URLSearchParams(location.search);
+            document.write(`<iframe src="https://maps.google.com/maps?ll=${q.get('lat')},${q.get('lng')}&t=k&z=${q.get('z')}&output=embed&hl=ru"></iframe>`);
+          </script>
+          HTML
           python3 -m http.server 8099 >/dev/null 2>&1 &
           npm install --silent --no-audit --no-fund puppeteer-core@23.11.1
           node --input-type=module <<'JS'
@@ -52,7 +59,8 @@ jobs:
 
           const places = [
             { name: 'Ростов-Арена, построена в 2018 (контроль)', lat: 47.2094, lng: 39.7377, z: 16 },
-            { name: 'Новый Ростов на месте старого аэропорта, стройка 2021–2026', lat: 47.2582, lng: 39.8181, z: 15 },
+            { name: 'Старый аэропорт, где строят «Новый Ростов», общий вид', lat: 47.2600, lng: 39.8060, z: 14 },
+            { name: '«Новый Ростов» по поиску адреса', query: 'жилой комплекс Новый Ростов', z: 16 },
             { name: 'Школа № 74, ул. Платона Кляты, открыта в 2025', query: 'улица Платона Кляты' , z: 16 },
             { name: 'Корпус школы № 32, ул. Дмитрия Петрова, открыт в 2025', query: 'улица Дмитрия Петрова', z: 16 },
             { name: 'Квартал «Левобережье», детсад «Причал 23», 2024', query: 'Левобережная улица', z: 16 },
@@ -71,8 +79,21 @@ jobs:
             }
           }
 
+          // Esri publishes a metadata service per imagery release; use the newest one that answers.
+          let esriService = null;
+          for (const year of [2026, 2025]) {
+            for (let release = 15; release >= 1 && !esriService; release -= 1) {
+              const name = `World_Imagery_Metadata_${year}_r${String(release).padStart(2, '0')}`;
+              const info = await fetch(`https://metadata.maptiles.arcgis.com/arcgis/rest/services/${name}/MapServer?f=json`).then(r => r.json()).catch(() => null);
+              if (info && !info.error) esriService = name;
+            }
+            if (esriService) break;
+          }
+          console.log(`Esri metadata service: ${esriService}`);
+
           async function esriDate(place) {
-            const url = new URL('https://metadata.maptiles.arcgis.com/arcgis/rest/services/World_Imagery_Metadata/MapServer/identify');
+            if (!esriService) return 'no metadata service';
+            const url = new URL(`https://metadata.maptiles.arcgis.com/arcgis/rest/services/${esriService}/MapServer/identify`);
             url.search = new URLSearchParams({
               geometry: JSON.stringify({ x: place.lng, y: place.lat, spatialReference: { wkid: 4326 } }),
               geometryType: 'esriGeometryPoint', sr: '4326', layers: 'all', tolerance: '1',
@@ -83,7 +104,7 @@ jobs:
             if (!reply.results) return `metadata error: ${JSON.stringify(reply).slice(0, 200)}`;
             return reply.results.map(r => {
               const a = r.attributes;
-              return `levels ${a.MIN_MAPLEV ?? a['Min Map Level'] ?? '?'}-${a.MAX_MAPLEV ?? a['Max Map Level'] ?? '?'}: date ${a.SRC_DATE ?? a['Source Date'] ?? '?'}, ${a.SRC_RES ?? a['Source Resolution'] ?? '?'} m, ${a.NICE_DESC ?? a['Description'] ?? a.SRC_DESC ?? ''}`;
+              return `${r.layerName}: ${JSON.stringify(a).slice(0, 400)}`;
             }).join(' | ');
           }
 
@@ -101,7 +122,7 @@ jobs:
           const providers = {
             yandex: p => `http://localhost:8099/yandex.html?lat=${p.lat}&lng=${p.lng}&z=${p.z}`,
             esri: p => `http://localhost:8099/esri.html?lat=${p.lat}&lng=${p.lng}&z=${p.z}`,
-            google: p => `https://maps.google.com/maps?ll=${p.lat},${p.lng}&t=k&z=${p.z}&output=embed&hl=ru`,
+            google: p => `http://localhost:8099/google.html?lat=${p.lat}&lng=${p.lng}&z=${p.z}`,
             bing: p => `https://www.bing.com/maps/embed?h=400&w=500&cp=${p.lat}~${p.lng}&lvl=${p.z}&typ=d&sty=a&src=SHELL&FORM=MBEDV8`
           };
 
@@ -123,7 +144,7 @@ jobs:
           // The People's Map editor shows the date of Yandex imagery in its corner.
           const big = await browser.newPage();
           await big.setViewport({ width: 1200, height: 800 });
-          for (const index of [1, 2, 6]) {
+          for (const index of []) {
             const place = places[index];
             if (!place.lat) continue;
             try {
