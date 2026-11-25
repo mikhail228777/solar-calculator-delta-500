@@ -2,45 +2,135 @@
 <html lang="ru">
 <head>
   <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <meta name="description" content="Рассчитайте время работы от аккумулятора, солнечную выработку и экономию на электроэнергии для дома.">
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+  <title>Солнечные панели на вашей крыше</title>
+  <meta name="description" content="Найдите дом на спутниковой карте, отметьте крышу и узнайте, сколько панелей поместится и сколько вы сэкономите на электричестве.">
   <meta name="robots" content="noindex, nofollow">
-  <title>Солнечные панели для дома · Delta 500</title>
+  <meta name="theme-color" content="#D9621A">
   <link rel="stylesheet" href="./leaflet.css">
-  <link rel="stylesheet" href="./style.css?v=2">
+  <link rel="stylesheet" href="./roof.css?v=1">
   <script src="./leaflet.js" defer></script>
-  <script src="./app.js?v=2" type="module"></script>
+  <script src="./roof.js?v=1" type="module"></script>
 </head>
-<body data-mode="home">
-  <header class="site-header">
-    <div class="container header-inner">
-      <a class="brand" href="./"><span class="brand-icon" aria-hidden="true">☀︎</span> Солнечный калькулятор</a>
-      <nav class="audience-nav" aria-label="Варианты расчёта">
-        <a href="./" aria-current="page">Для дома</a>
-        <a href="./industry.html">Для предприятий</a>
-      </nav>
-      <a class="passport-link" href="./panel.pdf" target="_blank" rel="noopener">Паспорт модуля <span aria-hidden="true">→</span></a>
+<body>
+  <header class="top">
+    <div class="wrap top-inner">
+      <span class="logo"><span class="sun" aria-hidden="true"></span>Солнечный расчёт</span>
+      <a class="top-link" href="./panel.pdf" target="_blank" rel="noopener">Панель Delta 500 Вт</a>
     </div>
   </header>
 
-  <main>
-    <section class="hero" aria-labelledby="page-title">
-      <div class="container intro">
-        <div class="hero-copy">
-          <h1 id="page-title">Солнечная энергия <span>для дома</span></h1>
-          <p>Оцените, сколько часов проработают нужные приборы при отключении сети и сколько энергии дадут панели.</p>
-        </div>
-        <figure class="module-photo">
-          <img src="./images/delta-module.png" alt="Лицевая и тыльная стороны модуля Delta PV TOP" width="400" height="400" fetchpriority="high">
-          <figcaption><span>Delta PV TOP</span><b>500 Вт</b></figcaption>
-        </figure>
-      </div>
+  <main class="wrap">
+    <section class="intro">
+      <h1>Сколько сэкономят солнечные панели на&nbsp;вашей крыше</h1>
+      <p>Найдите дом, отметьте крышу на карте и узнайте, сколько панелей поместится и сколько денег они сберегут. Займёт около минуты.</p>
     </section>
 
-    <div class="container workspace" id="workspace">
-      <noscript>Для расчёта включите JavaScript в браузере.</noscript>
-    </div>
+    <section class="step" id="step-place" aria-labelledby="h-place">
+      <h2 id="h-place"><span class="num" aria-hidden="true">1</span>Найдите свой дом</h2>
+      <form class="search" id="search-form" role="search">
+        <input id="address" type="search" placeholder="Город, улица, дом" autocomplete="off" enterkeyhint="search" aria-label="Адрес" maxlength="160">
+        <button type="submit" class="btn" id="find">Найти</button>
+      </form>
+      <button type="button" class="btn ghost wide" id="locate"><span aria-hidden="true">◎</span> Моё местоположение</button>
+      <p class="status" id="search-status" role="status" hidden></p>
+      <ul class="found" id="found" aria-label="Найденные адреса" hidden></ul>
+    </section>
+
+    <section class="step" id="step-roof" aria-labelledby="h-roof">
+      <h2 id="h-roof"><span class="num" aria-hidden="true">2</span>Отметьте крышу</h2>
+      <p class="hint" id="draw-hint" aria-live="polite">Приблизьте карту к своему дому.</p>
+      <div class="map-box">
+        <div id="map" class="map" role="application" aria-label="Спутниковая карта: нажимайте на углы крыши"></div>
+        <div class="map-tools">
+          <button type="button" class="tool" id="undo" disabled>Отменить точку</button>
+          <button type="button" class="tool" id="restart" disabled>Заново</button>
+        </div>
+      </div>
+      <div class="dims">
+        <label class="dim"><span>Линия А</span><span class="unit"><input id="len-a" inputmode="decimal" placeholder="10" maxlength="6" aria-label="Длина линии А, метров"><i>м</i></span></label>
+        <span class="times" aria-hidden="true">×</span>
+        <label class="dim"><span>Линия Б</span><span class="unit"><input id="len-b" inputmode="decimal" placeholder="10" maxlength="6" aria-label="Длина линии Б, метров"><i>м</i></span></label>
+        <div class="area"><span>Площадь</span><output id="area-out">—</output></div>
+      </div>
+      <p class="fit" id="fit-out" hidden></p>
+      <p class="small">Не видно дома на снимке? Введите длину и ширину вручную.</p>
+    </section>
+
+    <section class="step" id="step-type" aria-labelledby="h-type">
+      <h2 id="h-type"><span class="num" aria-hidden="true">3</span>Какая крыша?</h2>
+      <div class="seg" role="radiogroup" aria-label="Тип крыши">
+        <label><input type="radio" name="roof" value="pitched" checked><span>Скатная</span></label>
+        <label><input type="radio" name="roof" value="flat"><span>Плоская</span></label>
+      </div>
+      <div id="pitched-opts">
+        <p class="label" id="l-dir">Куда смотрит скат с панелями?</p>
+        <div class="chips" role="radiogroup" aria-labelledby="l-dir">
+          <label><input type="radio" name="azimuth" value="180" checked><span>Юг <small>лучше всего</small></span></label>
+          <label><input type="radio" name="azimuth" value="135"><span>Юго-восток или юго-запад</span></label>
+          <label><input type="radio" name="azimuth" value="90"><span>Восток или запад</span></label>
+          <label><input type="radio" name="azimuth" value="0"><span>Север</span></label>
+        </div>
+        <p class="label" id="l-tilt">Уклон крыши</p>
+        <div class="chips" role="radiogroup" aria-labelledby="l-tilt">
+          <label><input type="radio" name="tilt" value="20"><span>Пологий <small>≈20°</small></span></label>
+          <label><input type="radio" name="tilt" value="30" checked><span>Обычный <small>≈30°</small></span></label>
+          <label><input type="radio" name="tilt" value="45"><span>Крутой <small>≈45°</small></span></label>
+        </div>
+        <p class="small">Отмечайте на карте только тот скат, где будут панели.</p>
+      </div>
+      <p class="note" id="flat-note" hidden></p>
+    </section>
+
+    <section class="step" id="step-use" aria-labelledby="h-use">
+      <h2 id="h-use"><span class="num" aria-hidden="true">4</span>Сколько вы тратите на свет?</h2>
+      <div class="seg" role="radiogroup" aria-label="Кто вы">
+        <label><input type="radio" name="mode" value="home" checked><span>Частный дом</span></label>
+        <label><input type="radio" name="mode" value="business"><span>Бизнес</span></label>
+      </div>
+      <label class="field" for="bill">Платёж за свет в месяц</label>
+      <span class="unit big-input"><input id="bill" inputmode="numeric" placeholder="Например, 3 000" maxlength="9"><i>₽</i></span>
+      <div class="chips quick" id="bill-chips" aria-label="Быстрый выбор суммы"></div>
+      <details class="by-area" id="by-area">
+        <summary>Не знаю — оценить по площади дома</summary>
+        <label class="field" for="house-area">Площадь дома</label>
+        <span class="unit big-input"><input id="house-area" inputmode="decimal" placeholder="Например, 120" maxlength="6"><i>м²</i></span>
+        <p class="small" id="area-estimate">Посчитаем по среднему: 150 кВт·ч в месяц на базовые приборы и ещё 2 кВт·ч на каждый квадратный метр.</p>
+      </details>
+      <p class="error" id="calc-error" role="alert" hidden></p>
+      <button type="button" class="btn primary big" id="calculate">Рассчитать экономию</button>
+    </section>
+
+    <section class="step result" id="result" aria-labelledby="h-result" hidden>
+      <h2 id="h-result">Ваш результат</h2>
+      <p class="lead" id="result-lead"></p>
+      <div class="count-box">
+        <label class="count-head" for="count-range"><span>Количество панелей</span><output id="count-out" for="count-range"></output></label>
+        <input type="range" id="count-range" min="1" max="10" step="1">
+        <p class="small" id="count-note"></p>
+      </div>
+      <div id="result-body"></div>
+      <details class="assume">
+        <summary>Как считали и что можно поменять</summary>
+        <div class="grid2">
+          <label>Тариф, ₽ за кВт·ч<input id="a-tariff" inputmode="decimal" maxlength="6"></label>
+          <label>Цена под ключ, ₽ за 1 кВт<input id="a-price" inputmode="numeric" maxlength="9"></label>
+          <label>Сразу тратится, % выработки<input id="a-self" inputmode="numeric" maxlength="3"></label>
+        </div>
+        <ul id="assume-list"></ul>
+      </details>
+      <div class="cta">
+        <b>Получить точный расчёт</b>
+        <p>Демо-версия: здесь будет заявка. Инженер проверит крышу по снимку и пришлёт смету.</p>
+      </div>
+    </section>
   </main>
-  <footer class="site-footer"><div class="container">Предварительная оценка <a href="./methodology.html">Формулы и исходные данные →</a></div></footer>
+
+  <footer class="foot">
+    <div class="wrap">
+      <p>Предварительная оценка. Точный расчёт делает инженер после осмотра крыши.</p>
+      <p><a href="./home.html">Подробный калькулятор для дома</a> · <a href="./industry.html">для предприятий</a> · <a href="./methodology.html">Формулы и данные</a></p>
+    </div>
+  </footer>
 </body>
 </html>

@@ -7,7 +7,11 @@ on:
     paths:
       - '.github/workflows/check-pages.yml'
       - 'index.html'
+      - 'home.html'
       - 'industry.html'
+      - 'roof.js'
+      - 'roof.css'
+      - 'geometry.js'
       - 'methodology.*'
       - 'app.js'
       - 'calculator-template.js'
@@ -39,8 +43,8 @@ jobs:
 
           const site = new URL(process.env.SITE_URL);
           const commit = process.env.GITHUB_SHA;
-          const files = ['index.html', 'industry.html', 'methodology.html', 'app.js',
-            'calculator-template.js', 'providers.js', 'solar.js', 'style.css'];
+          const files = ['index.html', 'home.html', 'industry.html', 'methodology.html', 'app.js',
+            'calculator-template.js', 'providers.js', 'solar.js', 'style.css', 'roof.js', 'roof.css', 'geometry.js'];
           const expected = await Promise.all(files.map(async sourcePath => {
             const source = `https://raw.githubusercontent.com/${process.env.GITHUB_REPOSITORY}/${commit}/${sourcePath}`;
             const original = await fetch(source, { signal: AbortSignal.timeout(10000) });
@@ -77,6 +81,16 @@ jobs:
           assert.equal(Math.round(factory.saving), 3338576);
           assert.equal(Math.round(factory.payback * 10), 54);
           assert.equal(calculateBackup({ battery: 10, load: 0.5, charge: 100, inverter: 3 }).hours, 18);
+
+          const [, layoutSource] = expected.find(([url]) => url.pathname.endsWith('/geometry.js'));
+          const { layoutPanels, manualRect } = await import(`data:text/javascript;base64,${Buffer.from(layoutSource).toString('base64')}`);
+          const roof = manualRect({ lat: 47.2357, lng: 39.7015 }, 10, 10);
+          const pitched = layoutPanels(roof, { roof: 'pitched', azimuth: 180, tilt: 30, lat: 47.2357 });
+          const flat = layoutPanels(roof, { roof: 'flat', lat: 47.2357 });
+          assert.equal(pitched.count, 40);
+          assert.equal(flat.count, 14);
+          assert.equal(flat.tilt, 34);
+          assert.equal(Math.round(flat.rowGap * 10), 31);
           console.log(`Pages serves ${commit.slice(0, 7)}. Both calculations match the examples based on the NASA archive.`);
           JS
       - name: Photon responds to an address search and permits browser requests
@@ -102,6 +116,19 @@ jobs:
               && Math.abs(longitude - 39.7) < 0.5 && Math.abs(latitude - 47.24) < 0.5;
           }), 'Photon did not return a Russian address near Rostov-on-Don.');
           console.log('Photon returned valid coordinates and allowed the browser origin.');
+          JS
+      - name: Esri World Imagery serves a satellite tile
+        if: always()
+        run: |
+          node --input-type=module <<'JS'
+          import assert from 'node:assert/strict';
+          const site = process.env.SITE_URL;
+          const reply = await fetch('https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/17/45968/79990', {
+            headers: { Referer: site }, signal: AbortSignal.timeout(12000)
+          });
+          assert.ok(reply.ok, `Esri World Imagery: HTTP ${reply.status}`);
+          assert.match(reply.headers.get('content-type') ?? '', /^image\//);
+          console.log('Esri World Imagery returned a satellite tile of Rostov-on-Don.');
           JS
       - name: OpenStreetMap serves a tile
         if: always()
