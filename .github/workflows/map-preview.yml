@@ -76,6 +76,28 @@ jobs:
           console.log('PREVIEW-BEGIN');
           for (let index = 0; index < shot.length; index += 4000) console.log(shot.slice(index, index + 4000));
           console.log('PREVIEW-END');
+
+          // The imagery switch must keep the marked roof on the other map.
+          const pick = value => page.evaluate(name => {
+            const input = document.querySelector(`input[name="imagery"][value="${name}"]`);
+            input.checked = true;
+            input.dispatchEvent(new Event('change'));
+          }, value);
+          await pick('esri');
+          await wait(5000);
+          const afterSwitch = await page.evaluate(() => ({ map: document.documentElement.dataset.map, corners: document.querySelectorAll('#map .corner').length }));
+          console.log(`After switching to Esri: ${JSON.stringify(afterSwitch)}`);
+          const esriShot = Buffer.from(await map.screenshot({ type: 'jpeg', quality: 60 })).toString('base64');
+          console.log('PREVIEW-ESRI-BEGIN');
+          for (let index = 0; index < esriShot.length; index += 4000) console.log(esriShot.slice(index, index + 4000));
+          console.log('PREVIEW-ESRI-END');
+          await pick('yandex');
+          await wait(6000);
+          const back = await page.evaluate(() => ({ map: document.documentElement.dataset.map, corners: document.querySelectorAll('#map .corner').length }));
+          console.log(`After switching back to Yandex: ${JSON.stringify(back)}`);
           await browser.close();
           assert.ok(['yandex', 'esri'].includes(provider), `The map did not load (${provider}).`);
+          assert.equal(afterSwitch.map, 'esri');
+          assert.equal(afterSwitch.corners, 3);
+          assert.equal(back.corners, 3);
           JS

@@ -30,7 +30,7 @@ const PASS = { interactivityModel: 'default#transparent' };
 export async function createYandexView(container, { center, zoom }, key) {
   const params = new URLSearchParams({ lang: 'ru_RU' });
   if (key) params.set('apikey', key);
-  await loadScript(`${API}?${params}`, 10000);
+  if (!window.ymaps) await loadScript(`${API}?${params}`, 10000);
   await new Promise((resolve, reject) => window.ymaps.ready(resolve, reject));
   const { ymaps } = window;
 
@@ -59,6 +59,7 @@ export async function createYandexView(container, { center, zoom }, key) {
 
   return {
     provider: 'yandex',
+    destroy: () => map.destroy(),
     onClick: callback => map.events.add('click', event => callback(point(event.get('coords')))),
     onMove: callback => map.events.add('mousemove', event => callback(point(event.get('coords')))),
     onZoom: callback => map.events.add('boundschange', event => {

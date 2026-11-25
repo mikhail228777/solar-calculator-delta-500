@@ -58,6 +58,7 @@ export async function createLeafletView(container, { center, zoom }) {
 
   return {
     provider: 'esri',
+    destroy: () => map.remove(),
     onClick: callback => map.on('click', event => callback(point(event.latlng))),
     onMove: callback => map.on('mousemove', event => callback(point(event.latlng))),
     onZoom: callback => map.on('zoomend', callback),

@@ -4,7 +4,7 @@ import {
   layoutPanels, manualRect, optimalTilt, rectCenter, rectCorners, rectFromPoints, resizeRect,
   toLocal, winterNoonElevation, PANEL_KW, PANEL_LONG
 } from './geometry.js?v=2';
-import { createMapView } from './map-view.js?v=1';
+import { createMapView } from './map-view.js?v=2';
 
 // Conditional inputs for the demo. Replace with the regional tariff table and the price list.
 const MODES = {
@@ -69,6 +69,7 @@ const state = {
   selfUse: null,
   panels: null,
   chosen: null,
+  here: null,
   shown: false
 };
 
@@ -316,6 +317,7 @@ function status(text, bad = false) {
 const closeZoom = () => (window.innerWidth < 600 ? 20 : 19);
 
 function goTo(point, zoom) {
+  state.here = point;
   view?.setView(point, zoom);
   view?.here(point);
   updateHint();
@@ -805,6 +807,43 @@ $('count-range').addEventListener('input', () => {
   recalcTimer = setTimeout(() => calculate({ scroll: false }), 120);
 });
 
+// ---------- Imagery ----------
+function attachView() {
+  document.documentElement.dataset.map = view?.provider ?? 'none';
+  const current = document.querySelector(`input[name="imagery"][value="${view?.provider}"]`);
+  if (current) current.checked = true;
+  if (!view) return;
+  view.onClick(onMapClick);
+  view.onMove(onMapMove);
+  view.onZoom(updateHint);
+  if (state.here) view.here(state.here);
+  syncHandles();
+  redraw();
+  drawPanels();
+  updateHint();
+}
+
+let switching = false;
+async function switchImagery(provider) {
+  if (switching || !view || view.provider === provider) return;
+  switching = true;
+  const center = view.getCenter();
+  const zoom = view.getZoom();
+  view.destroy();
+  view = null;
+  $('map').replaceChildren();
+  try {
+    view = await createMapView($('map'), { center, zoom }, provider);
+  } catch (error) {
+    console.error(error);
+    $('map').textContent = 'Карта не загрузилась. Введите длину и ширину крыши вручную.';
+  }
+  switching = false;
+  attachView();
+}
+
+document.querySelectorAll('input[name="imagery"]').forEach(input => input.addEventListener('change', () => switchImagery(input.value)));
+
 // ---------- Start ----------
 async function start() {
   const restored = restore();
@@ -820,17 +859,8 @@ async function start() {
     console.error(error);
     $('map').textContent = 'Карта не загрузилась. Введите длину и ширину крыши вручную.';
   }
-  document.documentElement.dataset.map = view?.provider ?? 'none';
-  $('map-note').hidden = view?.provider !== 'esri';
-  if (view) {
-    view.onClick(onMapClick);
-    view.onMove(onMapMove);
-    view.onZoom(updateHint);
-    if (state.rect) view.fitPoints(rectCorners(state.rect));
-  }
-  syncHandles();
-  redraw();
-  updateHint();
+  attachView();
+  if (view && state.rect) view.fitPoints(rectCorners(state.rect));
   roofChanged();
   if (restored.ready) {
     state.panels = restored.panels && Math.round(restored.panels);

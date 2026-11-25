@@ -8,8 +8,8 @@
   <meta name="robots" content="noindex, nofollow">
   <meta name="theme-color" content="#D9621A">
   <link rel="preconnect" href="https://api-maps.yandex.ru">
-  <link rel="stylesheet" href="./roof.css?v=2">
-  <script src="./roof.js?v=2" type="module"></script>
+  <link rel="stylesheet" href="./roof.css?v=3">
+  <script src="./roof.js?v=3" type="module"></script>
 </head>
 <body>
   <header class="top">
@@ -46,7 +46,14 @@
           <button type="button" class="tool" id="restart" disabled>Заново</button>
         </div>
       </div>
-      <p class="small" id="map-note" hidden>Снимки Яндекса сейчас не загрузились, поэтому показаны снимки Esri — они бывают старыми.</p>
+      <div class="imagery">
+        <span id="l-imagery">Снимки:</span>
+        <div class="seg small-seg" role="radiogroup" aria-labelledby="l-imagery">
+          <label><input type="radio" name="imagery" value="yandex" checked><span>Яндекс</span></label>
+          <label><input type="radio" name="imagery" value="esri"><span>Esri, весна 2025</span></label>
+        </div>
+      </div>
+      <p class="small" id="map-note">Не видно вашего дома? Переключите снимки — их снимали в разное время. Если дома нет ни там, ни там, введите размеры вручную.</p>
       <div class="dims">
         <label class="dim"><span>Линия А</span><span class="unit"><input id="len-a" inputmode="decimal" placeholder="10" maxlength="6" aria-label="Длина линии А, метров"><i>м</i></span></label>
         <span class="times" aria-hidden="true">×</span>
