@@ -58,6 +58,10 @@ jobs:
               .catch(error => String(error));
             console.log(`Loader with key ${key.slice(0, 8)}… and referer ${referer}: ${loader}`);
           }
+          const body = await fetch(`https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${key}`, { headers: { Referer: site.origin + '/' } }).then(reply => reply.text());
+          const at = body.search(/invalid api key/i);
+          console.log(`Loader size ${body.length}; around the message: ${at < 0 ? 'none' : body.slice(Math.max(0, at - 400), at + 120).replace(/\s+/g, ' ')}`);
+          console.log(`Key-related settings: ${(body.match(/["']?(apikey|apiKey|isApikeyValid|apikeyValid|key)["']?\s*:\s*[^,}]{1,60}/g) ?? []).slice(0, 12).join(' | ')}`);
 
           const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
           const page = await browser.newPage();
