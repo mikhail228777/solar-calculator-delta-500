@@ -49,12 +49,29 @@ jobs:
             await wait(5000);
           }
 
+          // Ask Yandex directly whether it accepts the configured key for this site.
+          const config = sources[files.indexOf('config.js')];
+          const key = config.match(/YANDEX_MAPS_KEY = '([^']*)'/)?.[1] ?? '';
+          for (const referer of [site.origin + '/', 'https://example.com/']) {
+            const loader = await fetch(`https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${key}`, { headers: { Referer: referer } })
+              .then(async reply => `HTTP ${reply.status}, ${(await reply.text()).match(/invalid[^"'\n]{0,60}/i)?.[0] ?? 'no "invalid" in the loader'}`)
+              .catch(error => String(error));
+            console.log(`Loader with key ${key.slice(0, 8)}… and referer ${referer}: ${loader}`);
+          }
+
           const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
           const page = await browser.newPage();
           await page.setViewport({ width: 412, height: 860, isMobile: true, hasTouch: true });
           const notes = [];
           page.on('console', message => {
             if (['error', 'warn', 'warning'].includes(message.type())) notes.push(`${message.type()}: ${message.text().slice(0, 200)}`);
+          });
+          page.on('request', request => {
+            const url = request.url();
+            if (url.startsWith('https://api-maps.yandex.ru/2.1/')) {
+              const key = new URL(url).searchParams.get('apikey');
+              notes.push(`Yandex loader requested ${key ? `with key ${key.slice(0, 8)}…` : 'without a key'}, referer ${request.headers().referer ?? 'none'}`);
+            }
           });
           page.on('requestfailed', request => notes.push(`failed: ${request.url().slice(0, 140)} ${request.failure()?.errorText ?? ''}`));
           page.on('response', reply => {
