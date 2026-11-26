@@ -3,86 +3,163 @@
 <head>
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-  <title>Солнечные панели на вашей крыше</title>
-  <meta name="description" content="Найдите дом на спутниковой карте, отметьте крышу и узнайте, сколько панелей поместится и сколько вы сэкономите на электричестве.">
+  <title>Солнечные панели на вашей крыше — расчёт экономии</title>
+  <meta name="description" content="Найдите дом на спутниковом снимке, отметьте крышу и узнайте, сколько панелей поместится и сколько вы сэкономите на электричестве.">
   <meta name="robots" content="noindex, nofollow">
-  <meta name="theme-color" content="#D9621A">
+  <meta name="theme-color" content="#0F1B2D">
   <link rel="preconnect" href="https://api-maps.yandex.ru">
-  <link rel="stylesheet" href="./roof.css?v=3">
-  <script src="./roof.js?v=3" type="module"></script>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Manrope:wght@400;500;600;700;800&display=swap">
+  <link rel="stylesheet" href="./roof.css?v=4">
+  <script src="./roof.js?v=4" type="module"></script>
 </head>
 <body>
+  <svg class="sprite" aria-hidden="true" xmlns="http://www.w3.org/2000/svg">
+    <symbol id="i-sun" viewBox="0 0 24 24"><circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M4.93 19.07l1.41-1.41M17.66 6.34l1.41-1.41"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="11" cy="11" r="7"/><path d="m20 20-3.5-3.5"/></symbol>
+    <symbol id="i-locate" viewBox="0 0 24 24"><circle cx="12" cy="12" r="7"/><circle cx="12" cy="12" r="2.5"/><path d="M12 2v3M12 19v3M2 12h3M19 12h3"/></symbol>
+    <symbol id="i-pin" viewBox="0 0 24 24"><path d="M20 10c0 6-8 12-8 12s-8-6-8-12a8 8 0 0 1 16 0Z"/><circle cx="12" cy="10" r="3"/></symbol>
+    <symbol id="i-home" viewBox="0 0 24 24"><path d="m3 10 9-7 9 7v10a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2Z"/><path d="M9 22V12h6v10"/></symbol>
+    <symbol id="i-building" viewBox="0 0 24 24"><path d="M6 22V4a2 2 0 0 1 2-2h8a2 2 0 0 1 2 2v18Z"/><path d="M6 12H4a2 2 0 0 0-2 2v8M18 9h2a2 2 0 0 1 2 2v11M10 6h4M10 10h4M10 14h4M10 18h4"/></symbol>
+    <symbol id="i-zap" viewBox="0 0 24 24"><path d="M13 2 3 14h9l-1 8 10-12h-9z"/></symbol>
+    <symbol id="i-wallet" viewBox="0 0 24 24"><path d="M19 7V5a2 2 0 0 0-2-2H5a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-4"/><path d="M21 11h-5a2 2 0 0 0 0 4h5Z"/></symbol>
+    <symbol id="i-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></symbol>
+    <symbol id="i-panel" viewBox="0 0 24 24"><path d="M4 4h16l-2 16H6Z"/><path d="M3.5 10h17M5 16h14M10 4l-.6 16M14 4l.6 16"/></symbol>
+    <symbol id="i-battery" viewBox="0 0 24 24"><rect x="2" y="7" width="17" height="10" rx="2"/><path d="M22 11v2M6 10v4M10 10v4"/></symbol>
+    <symbol id="i-share" viewBox="0 0 24 24"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><path d="m8.6 13.5 6.8 4M15.4 6.5l-6.8 4"/></symbol>
+    <symbol id="i-map" viewBox="0 0 24 24"><path d="M9 3 3 6v15l6-3 6 3 6-3V3l-6 3Z"/><path d="M9 3v15M15 6v15"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14M13 6l6 6-6 6"/></symbol>
+    <symbol id="i-up" viewBox="0 0 24 24"><path d="M12 19V5M6 11l6-6 6 6"/></symbol>
+    <symbol id="i-undo" viewBox="0 0 24 24"><path d="M3 7v6h6"/><path d="M21 17a9 9 0 0 0-15-6.7L3 13"/></symbol>
+    <symbol id="i-reset" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 2.6-6.4L3 8"/><path d="M3 3v5h5"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"/></symbol>
+    <symbol id="i-phone" viewBox="0 0 24 24"><path d="M22 16.9v3a2 2 0 0 1-2.2 2 19.8 19.8 0 0 1-8.6-3.1 19.5 19.5 0 0 1-6-6A19.8 19.8 0 0 1 2.1 4.2 2 2 0 0 1 4.1 2h3a2 2 0 0 1 2 1.7c.1 1 .4 1.9.7 2.8a2 2 0 0 1-.5 2.1L8 9.9a16 16 0 0 0 6 6l1.3-1.3a2 2 0 0 1 2.1-.4c.9.3 1.8.6 2.8.7a2 2 0 0 1 1.7 2Z"/></symbol>
+  </svg>
+
+  <a class="skip" href="#calc">Перейти к расчёту</a>
+
   <header class="top">
     <div class="wrap top-inner">
-      <span class="logo"><span class="sun" aria-hidden="true"></span>Солнечный расчёт</span>
+      <a class="logo" href="./" aria-label="Солнечный расчёт — на главную">
+        <span class="logo-mark" aria-hidden="true"><svg><use href="#i-sun"/></svg></span>
+        Солнечный расчёт
+      </a>
       <a class="top-link" href="./panel.pdf" target="_blank" rel="noopener">Панель Delta 500 Вт</a>
     </div>
   </header>
 
-  <main class="wrap">
-    <section class="intro">
-      <h1>Сколько сэкономят солнечные панели на&nbsp;вашей крыше</h1>
-      <p>Найдите дом, отметьте крышу на карте и узнайте, сколько панелей поместится и сколько денег они сберегут. Займёт около минуты.</p>
-    </section>
+  <section class="hero">
+    <div class="wrap hero-inner">
+      <div class="hero-copy">
+        <p class="eyebrow"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg>Калькулятор солнечной станции</p>
+        <h1>Сколько сэкономят солнечные панели на&nbsp;<span>вашей крыше</span></h1>
+        <p class="lead-in">Найдите дом на спутниковом снимке, отметьте крышу — и сразу увидите, сколько панелей поместится, сколько энергии они дадут и когда окупятся.</p>
+        <ul class="perks">
+          <li><svg class="ic" aria-hidden="true"><use href="#i-clock"/></svg>Около минуты</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-map"/></svg>Снимки Яндекс Карт</li>
+          <li><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg>Солнце вашего города</li>
+        </ul>
+        <a class="btn primary hero-cta" href="#calc">Начать расчёт<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></a>
+      </div>
+      <figure class="hero-art" aria-hidden="true">
+        <img src="./images/delta-module.png" alt="" width="400" height="400" fetchpriority="high">
+        <figcaption><b>500 Вт</b><span>Delta PV TOP, двусторонняя</span></figcaption>
+      </figure>
+    </div>
+  </section>
 
+  <nav class="progress" aria-label="Шаги расчёта">
+    <ol class="wrap">
+      <li><a href="#step-place" data-step="place"><span class="dot">1</span><span class="name">Дом</span></a></li>
+      <li><a href="#step-roof" data-step="roof"><span class="dot">2</span><span class="name">Крыша</span></a></li>
+      <li><a href="#step-type" data-step="type"><span class="dot">3</span><span class="name">Тип</span></a></li>
+      <li><a href="#step-use" data-step="use"><span class="dot">4</span><span class="name">Расход</span></a></li>
+    </ol>
+  </nav>
+
+  <main class="wrap" id="calc">
     <section class="step" id="step-place" aria-labelledby="h-place">
-      <h2 id="h-place"><span class="num" aria-hidden="true">1</span>Найдите свой дом</h2>
+      <header class="step-head">
+        <span class="num" aria-hidden="true">1</span>
+        <div><h2 id="h-place">Найдите свой дом</h2><p>Введите адрес или определите местоположение.</p></div>
+      </header>
       <form class="search" id="search-form" role="search">
-        <input id="address" type="search" placeholder="Город, улица, дом" autocomplete="off" enterkeyhint="search" aria-label="Адрес" maxlength="160">
-        <button type="submit" class="btn" id="find">Найти</button>
+        <label class="search-field">
+          <svg class="ic" aria-hidden="true"><use href="#i-search"/></svg>
+          <input id="address" type="search" placeholder="Город, улица, дом" autocomplete="off" enterkeyhint="search" aria-label="Адрес" maxlength="160">
+        </label>
+        <button type="submit" class="btn primary" id="find">Найти</button>
       </form>
-      <button type="button" class="btn ghost wide" id="locate"><span aria-hidden="true">◎</span> Моё местоположение</button>
+      <button type="button" class="btn ghost wide" id="locate"><svg class="ic" aria-hidden="true"><use href="#i-locate"/></svg>Моё местоположение</button>
       <p class="status" id="search-status" role="status" hidden></p>
       <ul class="found" id="found" aria-label="Найденные адреса" hidden></ul>
     </section>
 
     <section class="step" id="step-roof" aria-labelledby="h-roof">
-      <h2 id="h-roof"><span class="num" aria-hidden="true">2</span>Отметьте крышу</h2>
+      <header class="step-head">
+        <span class="num" aria-hidden="true">2</span>
+        <div><h2 id="h-roof">Отметьте крышу</h2><p>Три касания: два угла — линия А, край крыши — линия Б.</p></div>
+      </header>
       <p class="hint" id="draw-hint" aria-live="polite">Приблизьте карту к своему дому.</p>
       <div class="map-box">
         <div id="map" class="map" role="application" aria-label="Спутниковая карта: нажимайте на углы крыши"></div>
         <div class="map-tools">
-          <button type="button" class="tool" id="undo" disabled>Отменить точку</button>
-          <button type="button" class="tool" id="restart" disabled>Заново</button>
+          <button type="button" class="tool" id="undo" disabled><svg class="ic" aria-hidden="true"><use href="#i-undo"/></svg>Отменить точку</button>
+          <button type="button" class="tool" id="restart" disabled><svg class="ic" aria-hidden="true"><use href="#i-reset"/></svg>Заново</button>
         </div>
       </div>
-      <div class="imagery">
-        <span id="l-imagery">Снимки:</span>
-        <div class="seg small-seg" role="radiogroup" aria-labelledby="l-imagery">
-          <label><input type="radio" name="imagery" value="yandex" checked><span>Яндекс</span></label>
-          <label><input type="radio" name="imagery" value="esri"><span>Esri, весна 2025</span></label>
-        </div>
-      </div>
-      <p class="small" id="map-note">Не видно вашего дома? Переключите снимки — их снимали в разное время. Если дома нет ни там, ни там, введите размеры вручную.</p>
+      <p class="small" id="map-note" hidden>Яндекс Карты сейчас не загрузились, поэтому временно показаны снимки Esri.</p>
       <div class="dims">
         <label class="dim"><span>Линия А</span><span class="unit"><input id="len-a" inputmode="decimal" placeholder="10" maxlength="6" aria-label="Длина линии А, метров"><i>м</i></span></label>
         <span class="times" aria-hidden="true">×</span>
         <label class="dim"><span>Линия Б</span><span class="unit"><input id="len-b" inputmode="decimal" placeholder="10" maxlength="6" aria-label="Длина линии Б, метров"><i>м</i></span></label>
-        <div class="area"><span>Площадь</span><output id="area-out">—</output></div>
+        <div class="area"><span>Площадь участка</span><output id="area-out">—</output></div>
       </div>
       <p class="fit" id="fit-out" hidden></p>
-      <p class="small">Не видно дома на снимке? Введите длину и ширину вручную.</p>
+      <p class="small">Дома нет на снимке? Введите длину и ширину крыши вручную.</p>
     </section>
 
     <section class="step" id="step-type" aria-labelledby="h-type">
-      <h2 id="h-type"><span class="num" aria-hidden="true">3</span>Какая крыша?</h2>
-      <div class="seg" role="radiogroup" aria-label="Тип крыши">
-        <label><input type="radio" name="roof" value="pitched" checked><span>Скатная</span></label>
-        <label><input type="radio" name="roof" value="flat"><span>Плоская</span></label>
+      <header class="step-head">
+        <span class="num" aria-hidden="true">3</span>
+        <div><h2 id="h-type">Какая крыша?</h2><p>От этого зависит, как встанут панели.</p></div>
+      </header>
+      <div class="roof-cards" role="radiogroup" aria-label="Тип крыши">
+        <label class="roof-card">
+          <input type="radio" name="roof" value="pitched" checked>
+          <span class="card-body">
+            <svg class="roof-art" viewBox="0 0 96 64" aria-hidden="true">
+              <path class="wall" d="M18 34h60v26H18z"/><path class="roof" d="M10 36 48 8l38 28"/>
+              <path class="pv" d="M52 13.5 79 33l-5 4-26-19z"/><path class="pvl" d="M57 17.2l-4.6 3.9M63 21.6l-4.6 3.9M69 26l-4.6 3.9"/>
+            </svg>
+            <b>Скатная</b><small>Панели лежат на скате</small>
+          </span>
+        </label>
+        <label class="roof-card">
+          <input type="radio" name="roof" value="flat">
+          <span class="card-body">
+            <svg class="roof-art" viewBox="0 0 96 64" aria-hidden="true">
+              <path class="wall" d="M12 30h72v30H12z"/><path class="roof" d="M8 30h80"/>
+              <path class="pv" d="M18 28l12-10h4l-6 10zM44 28l12-10h4l-6 10zM70 28l12-10h4l-6 10z"/>
+            </svg>
+            <b>Плоская</b><small>Ряды панелей под углом</small>
+          </span>
+        </label>
       </div>
       <div id="pitched-opts">
         <p class="label" id="l-dir">Куда смотрит скат с панелями?</p>
-        <div class="chips" role="radiogroup" aria-labelledby="l-dir">
-          <label><input type="radio" name="azimuth" value="180" checked><span>Юг <small>лучше всего</small></span></label>
-          <label><input type="radio" name="azimuth" value="135"><span>Юго-восток или юго-запад</span></label>
-          <label><input type="radio" name="azimuth" value="90"><span>Восток или запад</span></label>
-          <label><input type="radio" name="azimuth" value="0"><span>Север</span></label>
+        <div class="options four" role="radiogroup" aria-labelledby="l-dir">
+          <label><input type="radio" name="azimuth" value="180" checked><span><svg class="ic dir s" aria-hidden="true"><use href="#i-up"/></svg>Юг<small>лучше всего</small></span></label>
+          <label><input type="radio" name="azimuth" value="135"><span><svg class="ic dir se" aria-hidden="true"><use href="#i-up"/></svg>Юго-восток или юго-запад</span></label>
+          <label><input type="radio" name="azimuth" value="90"><span><svg class="ic dir e" aria-hidden="true"><use href="#i-up"/></svg>Восток или запад</span></label>
+          <label><input type="radio" name="azimuth" value="0"><span><svg class="ic dir n" aria-hidden="true"><use href="#i-up"/></svg>Север<small>выработка ниже</small></span></label>
         </div>
         <p class="label" id="l-tilt">Уклон крыши</p>
-        <div class="chips" role="radiogroup" aria-labelledby="l-tilt">
-          <label><input type="radio" name="tilt" value="20"><span>Пологий <small>≈20°</small></span></label>
-          <label><input type="radio" name="tilt" value="30" checked><span>Обычный <small>≈30°</small></span></label>
-          <label><input type="radio" name="tilt" value="45"><span>Крутой <small>≈45°</small></span></label>
+        <div class="options three" role="radiogroup" aria-labelledby="l-tilt">
+          <label><input type="radio" name="tilt" value="20"><span><svg class="slope" viewBox="0 0 40 20" aria-hidden="true"><path d="M2 18h36L2 9z"/></svg>Пологий<small>≈20°</small></span></label>
+          <label><input type="radio" name="tilt" value="30" checked><span><svg class="slope" viewBox="0 0 40 20" aria-hidden="true"><path d="M2 18h36L2 5z"/></svg>Обычный<small>≈30°</small></span></label>
+          <label><input type="radio" name="tilt" value="45"><span><svg class="slope" viewBox="0 0 40 20" aria-hidden="true"><path d="M2 18h20L2 1z"/></svg>Крутой<small>≈45°</small></span></label>
         </div>
         <p class="small">Отмечайте на карте только тот скат, где будут панели.</p>
       </div>
@@ -90,14 +167,17 @@
     </section>
 
     <section class="step" id="step-use" aria-labelledby="h-use">
-      <h2 id="h-use"><span class="num" aria-hidden="true">4</span>Сколько вы тратите на свет?</h2>
+      <header class="step-head">
+        <span class="num" aria-hidden="true">4</span>
+        <div><h2 id="h-use">Сколько вы тратите на свет?</h2><p>Хватит суммы из квитанции.</p></div>
+      </header>
       <div class="seg" role="radiogroup" aria-label="Кто вы">
-        <label><input type="radio" name="mode" value="home" checked><span>Частный дом</span></label>
-        <label><input type="radio" name="mode" value="business"><span>Бизнес</span></label>
+        <label><input type="radio" name="mode" value="home" checked><span><svg class="ic" aria-hidden="true"><use href="#i-home"/></svg>Частный дом</span></label>
+        <label><input type="radio" name="mode" value="business"><span><svg class="ic" aria-hidden="true"><use href="#i-building"/></svg>Бизнес</span></label>
       </div>
       <label class="field" for="bill">Платёж за свет в месяц</label>
       <span class="unit big-input"><input id="bill" inputmode="numeric" placeholder="Например, 3 000" maxlength="9"><i>₽</i></span>
-      <div class="chips quick" id="bill-chips" aria-label="Быстрый выбор суммы"></div>
+      <div class="chips" id="bill-chips" aria-label="Быстрый выбор суммы"></div>
       <details class="by-area" id="by-area">
         <summary>Не знаю — оценить по площади дома</summary>
         <label class="field" for="house-area">Площадь дома</label>
@@ -105,21 +185,23 @@
         <p class="small" id="area-estimate">Посчитаем по среднему: 150 кВт·ч в месяц на базовые приборы и ещё 2 кВт·ч на каждый квадратный метр.</p>
       </details>
       <p class="error" id="calc-error" role="alert" hidden></p>
-      <button type="button" class="btn primary big" id="calculate">Рассчитать экономию</button>
+      <button type="button" class="btn primary big" id="calculate">Рассчитать экономию<svg class="ic" aria-hidden="true"><use href="#i-arrow"/></svg></button>
     </section>
 
-    <section class="step result" id="result" aria-labelledby="h-result" hidden>
-      <h2 id="h-result">Ваш результат</h2>
-      <p class="lead" id="result-lead"></p>
-      <div class="count-box">
-        <label class="count-head" for="count-range"><span>Количество панелей</span><output id="count-out" for="count-range"></output></label>
+    <section class="result" id="result" aria-labelledby="h-result" hidden>
+      <div class="result-hero">
+        <p class="eyebrow light" id="h-result"><svg class="ic" aria-hidden="true"><use href="#i-sun"/></svg>Ваш результат</p>
+        <div id="result-hero"></div>
+      </div>
+      <div class="card count-box">
+        <label class="count-head" for="count-range"><span><svg class="ic" aria-hidden="true"><use href="#i-panel"/></svg>Количество панелей</span><output id="count-out" for="count-range"></output></label>
         <input type="range" id="count-range" min="1" max="10" step="1">
         <p class="small" id="count-note"></p>
       </div>
       <div id="result-body"></div>
-      <details class="assume">
+      <details class="card assume">
         <summary>Как считали и что можно поменять</summary>
-        <div class="grid2">
+        <div class="grid3">
           <label>Тариф, ₽ за кВт·ч<input id="a-tariff" inputmode="decimal" maxlength="6"></label>
           <label>Цена под ключ, ₽ за 1 кВт<input id="a-price" inputmode="numeric" maxlength="9"></label>
           <label>Сразу тратится, % выработки<input id="a-self" inputmode="numeric" maxlength="3"></label>
@@ -127,8 +209,11 @@
         <ul id="assume-list"></ul>
       </details>
       <div class="cta">
-        <b>Получить точный расчёт</b>
-        <p>Демо-версия: здесь будет заявка. Инженер проверит крышу по снимку и пришлёт смету.</p>
+        <div>
+          <b>Получить точный расчёт</b>
+          <p id="lead-note" aria-live="polite">Инженер проверит крышу по снимку и пришлёт смету.</p>
+        </div>
+        <button type="button" class="btn primary" id="lead-button"><svg class="ic" aria-hidden="true"><use href="#i-phone"/></svg>Оставить заявку</button>
       </div>
     </section>
   </main>

@@ -31,6 +31,7 @@ const $ = id => document.getElementById(id);
 const fmt = (value, digits = 0) => value.toLocaleString('ru-RU', { maximumFractionDigits: digits });
 const money = value => fmt(Math.round(value / (Math.abs(value) >= 10000 ? 100 : 10)) * (Math.abs(value) >= 10000 ? 100 : 10));
 const energy = value => fmt(value >= 1000 ? Math.round(value / 10) * 10 : Math.round(value));
+const icon = (name, cls = 'ic') => `<svg class="${cls}" aria-hidden="true"><use href="#i-${name}"/></svg>`;
 const escapeHtml = text => text.replace(/[&<>"']/g, char => `&#${char.charCodeAt(0)};`);
 
 function plural(value, [one, few, many]) {
@@ -297,6 +298,7 @@ function roofChanged() {
   state.chosen = null;
   updateDims();
   updateLayout();
+  updateProgress();
   if (state.shown) {
     clearTimeout(recalcTimer);
     recalcTimer = setTimeout(() => calculate({ scroll: false }), 250);
@@ -318,6 +320,7 @@ const closeZoom = () => (window.innerWidth < 600 ? 20 : 19);
 
 function goTo(point, zoom) {
   state.here = point;
+  updateProgress();
   view?.setView(point, zoom);
   view?.here(point);
   updateHint();
@@ -363,7 +366,7 @@ $('search-form').addEventListener('submit', async event => {
       const item = document.createElement('li');
       const button = document.createElement('button');
       button.type = 'button';
-      button.innerHTML = `${escapeHtml(place.label)}<small>${escapeHtml(place.description)}</small>`;
+      button.innerHTML = `${icon('pin')}<span>${escapeHtml(place.label)}<small>${escapeHtml(place.description)}</small></span>`;
       button.addEventListener('click', () => selectPlace(place));
       item.append(button);
       return item;
@@ -462,6 +465,7 @@ function consumptionChanged() {
   $('calc-error').hidden = true;
   state.panels = null;
   updateAreaEstimate();
+  updateProgress();
   if (state.shown) {
     clearTimeout(recalcTimer);
     recalcTimer = setTimeout(() => calculate({ scroll: false }), 250);
@@ -557,7 +561,9 @@ async function calculate({ scroll = true } = {}) {
   const result = calculateSolar(climate.irradiation, { ...options, panels: count, cost });
   state.chosen = count;
   drawPanels();
+  const firstShow = $('result').hidden;
   $('result').hidden = false; // the chart measures its container, so it must be visible first
+  if (firstShow) $('result').classList.add('reveal');
   renderResult({ result, layout, count, capacity, needed, recommended, consumption, consumptionText, tariff, price, cost, lat: center.lat });
   state.shown = true;
   writeHash();
@@ -566,12 +572,14 @@ async function calculate({ scroll = true } = {}) {
 }
 
 $('calculate').addEventListener('click', () => calculate());
+$('lead-button').addEventListener('click', () => {
+  $('lead-note').textContent = 'Это демо-версия: форму заявки подключим, когда будут контакты для отправки (Telegram или почта).';
+});
 
 function renderResult({ result, layout, count, capacity, needed, recommended, consumption, consumptionText, tariff, price, cost, lat }) {
   const home = state.mode === 'home';
   const power = result.power;
   const panelsWord = plural(count, ['панель', 'панели', 'панелей']);
-  $('result-lead').innerHTML = `Ставим <b>${fmt(count)} ${panelsWord}</b> — станция на <b>${fmt(power, 1)} кВт</b>.`;
   const range = $('count-range');
   range.max = String(capacity);
   range.value = String(count);
@@ -601,17 +609,29 @@ function renderResult({ result, layout, count, capacity, needed, recommended, co
     ? `ряды на юг под углом ${layout.tilt}°, между рядами ${fmt(layout.rowGap, 1)} м, отступ от края 0,5 м`
     : `панели лежат по скату с уклоном ${layout.tilt}°, отступ от края 0,3 м`;
 
+  const monthSaving = result.saving / 12;
+  const selfShare = result.annual ? Math.round(result.used / result.annual * 100) : 0;
+  $('result-hero').innerHTML = `
+    <p class="saving-label">Вы сэкономите</p>
+    <p class="saving">≈ ${money(monthSaving)} ₽<small> в месяц</small></p>
+    <p class="saving-sub">≈ ${money(result.saving)} ₽ в год</p>
+    <div class="coverage" role="img" aria-label="Панели закроют ${coverage}% счёта за свет"><i style="width:${coverage}%"></i></div>
+    <div class="coverage-label"><span>Панели закроют ${coverage}% счёта</span><span>100%</span></div>
+    <span class="station">${icon('panel')}${fmt(count)} ${panelsWord} · ${fmt(power, 1)} кВт</span>`;
+
   $('result-body').innerHTML = `
     <div class="kpis">
-      <div class="kpi main"><span>Вы сэкономите</span><b>≈ ${money(result.saving / 12)} ₽<em> в месяц</em></b>
-        <small>≈ ${money(result.saving)} ₽ в год · панели закроют около ${coverage}% счёта за свет</small></div>
-      <div class="kpi"><span>Панели выработают</span><b>${energy(result.annual)} кВт·ч</b>
-        <small>в год · летом ≈ ${fmt(summer, summer < 10 ? 1 : 0)} кВт·ч в день, зимой ≈ ${fmt(winter, 1)}</small></div>
-      <div class="kpi"><span>Окупаемость</span><b>${result.payback ? `≈ ${years(result.payback)}` : '—'}</b>
-        <small>станция ≈ ${money(cost)} ₽ при ${money(price)} ₽ за 1 кВт под ключ</small></div>
+      <div class="kpi"><i class="kpi-icon">${icon('zap')}</i><span>Выработка за год</span><b>${energy(result.annual)} кВт·ч</b>
+        <small>летом ≈ ${fmt(summer, summer < 10 ? 1 : 0)} кВт·ч в день, зимой ≈ ${fmt(winter, 1)}</small></div>
+      <div class="kpi"><i class="kpi-icon">${icon('clock')}</i><span>Окупаемость</span><b>${result.payback ? `≈ ${years(result.payback)}` : '—'}</b>
+        <small>без учёта продажи излишков</small></div>
+      <div class="kpi"><i class="kpi-icon">${icon('wallet')}</i><span>Стоимость станции</span><b>≈ ${money(cost)} ₽</b>
+        <small>при ${money(price)} ₽ за 1 кВт под ключ</small></div>
+      <div class="kpi"><i class="kpi-icon">${icon('home')}</i><span>Ваш расход</span><b>${energy(consumption)} кВт·ч</b>
+        <small>в месяц · ≈ ${fmt(consumption / 730, 2)} кВт·ч каждый час</small></div>
     </div>
-    <div class="block">
-      <h3>Выработка по месяцам</h3>
+    <div class="card">
+      <h3>${icon('sun')}Выработка по месяцам</h3>
       <div class="legend"><span><i class="sw-bar"></i>Выработка панелей</span><span><i class="sw-ref"></i>Ваше потребление</span></div>
       <div class="chart" id="chart"></div>
       <details class="table-view"><summary>Показать таблицей</summary>
@@ -619,22 +639,24 @@ function renderResult({ result, layout, count, capacity, needed, recommended, co
         <tbody>${result.monthly.map((value, index) => `<tr><td>${MONTH_FULL[index]}</td><td>${energy(value)}</td><td>${energy(consumption)}</td></tr>`).join('')}</tbody></table>
       </details>
     </div>
-    <div class="block">
-      <h3>Куда уходит энергия</h3>
-      <p>Из ${energy(result.annual)} кВт·ч за год ${home ? 'дом' : 'предприятие'} сразу потратит <b>${energy(result.used)} кВт·ч</b>.
-      ${surplus > 1 ? `Ещё <b>${energy(surplus)} кВт·ч</b> — излишки: их можно продать в сеть${home ? ' или запасти в аккумуляторе' : ''}. В экономию излишки не включены.` : 'Излишков почти нет — всё уходит на свои нужды.'}</p>
+    <div class="card">
+      <h3>${icon('zap')}Куда уходит энергия</h3>
+      <div class="split" role="img" aria-label="Сразу тратится ${selfShare}%, излишки ${100 - selfShare}%"><i class="self" style="width:${selfShare}%"></i><i class="extra" style="flex:1"></i></div>
+      <div class="legend"><span><i class="sw-self"></i>Сразу тратится — ${energy(result.used)} кВт·ч</span><span><i class="sw-extra"></i>Излишки — ${energy(surplus)} кВт·ч</span></div>
+      <p>${surplus > 1 ? `Излишки можно продать в сеть${home ? ' или запасти в аккумуляторе' : ''}. В экономию они не включены.` : 'Излишков почти нет — вся энергия уходит на свои нужды.'}</p>
     </div>
-    ${home ? `<div class="block">
-      <h3>Аккумуляторы</h3>
+    ${home ? `<div class="card">
+      <h3>${icon('battery')}Аккумуляторы</h3>
+      <div class="batteries" aria-hidden="true">${icon('battery').repeat(batteries)}</div>
       <p>Чтобы вечером и ночью тоже жить от солнца, нужно примерно <b>${batteries} ${plural(batteries, ['аккумулятор', 'аккумулятора', 'аккумуляторов'])} по ${BATTERY_KWH} кВт·ч</b>.
       Если отключат свет, один аккумулятор продержит холодильник, свет и роутер (≈ 300 Вт) около <b>${fmt(Math.floor(backupHours))} часов</b>.</p>
-    </div>` : `<div class="block">
-      <h3>За 10 лет</h3>
+    </div>` : `<div class="card">
+      <h3>${icon('wallet')}За 10 лет</h3>
       <p>Экономия за 10 лет — около <b>${money(decade)} ₽</b> по сегодняшнему тарифу, с учётом износа панелей 0,5% в год. Если тариф будет расти, экономия будет больше.</p>
     </div>`}
     <div class="actions">
-      <button type="button" class="btn ghost" id="show-map">Панели на карте</button>
-      <button type="button" class="btn ghost" id="share">Поделиться</button>
+      <button type="button" class="btn ghost" id="show-map">${icon('map')}Панели на карте</button>
+      <button type="button" class="btn ghost" id="share">${icon('share')}Поделиться</button>
     </div>`;
 
   $('assume-list').innerHTML = `
@@ -807,11 +829,10 @@ $('count-range').addEventListener('input', () => {
   recalcTimer = setTimeout(() => calculate({ scroll: false }), 120);
 });
 
-// ---------- Imagery ----------
+// ---------- Map events ----------
 function attachView() {
   document.documentElement.dataset.map = view?.provider ?? 'none';
-  const current = document.querySelector(`input[name="imagery"][value="${view?.provider}"]`);
-  if (current) current.checked = true;
+  $('map-note').hidden = view?.provider !== 'esri';
   if (!view) return;
   view.onClick(onMapClick);
   view.onMove(onMapMove);
@@ -823,26 +844,32 @@ function attachView() {
   updateHint();
 }
 
-let switching = false;
-async function switchImagery(provider) {
-  if (switching || !view || view.provider === provider) return;
-  switching = true;
-  const center = view.getCenter();
-  const zoom = view.getZoom();
-  view.destroy();
-  view = null;
-  $('map').replaceChildren();
-  try {
-    view = await createMapView($('map'), { center, zoom }, provider);
-  } catch (error) {
-    console.error(error);
-    $('map').textContent = 'Карта не загрузилась. Введите длину и ширину крыши вручную.';
+// ---------- Step progress ----------
+const progressLinks = [...document.querySelectorAll('.progress a')];
+function updateProgress() {
+  const done = {
+    place: Boolean(state.here || state.rect),
+    roof: Boolean(state.layout?.count),
+    type: Boolean(state.layout?.count),
+    use: Boolean(state.bill || (state.mode === 'home' && state.houseArea))
+  };
+  for (const link of progressLinks) {
+    const finished = done[link.dataset.step];
+    link.classList.toggle('done', finished);
+    link.querySelector('.dot').innerHTML = finished ? icon('check') : String(progressLinks.indexOf(link) + 1);
   }
-  switching = false;
-  attachView();
 }
 
-document.querySelectorAll('input[name="imagery"]').forEach(input => input.addEventListener('change', () => switchImagery(input.value)));
+if ('IntersectionObserver' in window) {
+  const watcher = new IntersectionObserver(entries => {
+    for (const entry of entries) {
+      if (!entry.isIntersecting) continue;
+      const step = entry.target.id.replace('step-', '');
+      progressLinks.forEach(link => link.classList.toggle('active', link.dataset.step === step));
+    }
+  }, { rootMargin: '-45% 0px -50% 0px' });
+  document.querySelectorAll('.step').forEach(step => watcher.observe(step));
+}
 
 // ---------- Start ----------
 async function start() {
