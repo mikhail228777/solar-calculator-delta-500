@@ -59,7 +59,7 @@ jobs:
             console.log(`Loader with key ${key.slice(0, 8)}… and referer ${referer}: ${loader}`);
           }
           // Compare the real key with a made-up one on API 2.1 and API 3.0.
-          for (const [label, testKey] of [['our key', key], ['made-up key', '00000000-1111-2222-3333-444444444444']]) {
+          for (const [label, testKey] of [['our key', key], ['first key', '56f0d297-8bd9-4079-bb59-e82164dbb49f'], ['made-up key', '00000000-1111-2222-3333-444444444444']]) {
             for (const [version, url] of [['2.1', 'https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey='], ['3.0', 'https://api-maps.yandex.ru/v3/?lang=ru_RU&apikey=']]) {
               const reply = await fetch(url + testKey, { headers: { Referer: site.origin + '/' } }).catch(() => null);
               const text = reply ? await reply.text() : '';
