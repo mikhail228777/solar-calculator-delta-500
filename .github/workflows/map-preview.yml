@@ -49,27 +49,12 @@ jobs:
             await wait(5000);
           }
 
-          // Ask Yandex directly whether it accepts the configured key for this site.
+          // Yandex marks the key as valid in the loader it returns for this site.
           const config = sources[files.indexOf('config.js')];
           const key = config.match(/YANDEX_MAPS_KEY = '([^']*)'/)?.[1] ?? '';
-          for (const referer of [site.origin + '/', 'https://example.com/']) {
-            const loader = await fetch(`https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${key}`, { headers: { Referer: referer } })
-              .then(async reply => `HTTP ${reply.status}, ${(await reply.text()).match(/invalid[^"'\n]{0,60}/i)?.[0] ?? 'no "invalid" in the loader'}`)
-              .catch(error => String(error));
-            console.log(`Loader with key ${key.slice(0, 8)}… and referer ${referer}: ${loader}`);
-          }
-          // Compare the real key with a made-up one on API 2.1 and API 3.0.
-          for (const [label, testKey] of [['our key', key], ['first key', '56f0d297-8bd9-4079-bb59-e82164dbb49f'], ['made-up key', '00000000-1111-2222-3333-444444444444']]) {
-            for (const [version, url] of [['2.1', 'https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey='], ['3.0', 'https://api-maps.yandex.ru/v3/?lang=ru_RU&apikey=']]) {
-              const reply = await fetch(url + testKey, { headers: { Referer: site.origin + '/' } }).catch(() => null);
-              const text = reply ? await reply.text() : '';
-              console.log(`Probe ${version} with ${label}: HTTP ${reply?.status}, apikeyValid ${text.match(/"apikeyValid":(\w+)/)?.[1] ?? 'n/a'}, ${text.match(/invalid[^"'\n]{0,40}/i)?.[0] ?? 'no invalid text'}, ${text.length} bytes`);
-            }
-          }
-          const body = await fetch(`https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${key}`, { headers: { Referer: site.origin + '/' } }).then(reply => reply.text());
-          const at = body.search(/invalid api key/i);
-          console.log(`Loader size ${body.length}; around the message: ${at < 0 ? 'none' : body.slice(Math.max(0, at - 400), at + 120).replace(/\s+/g, ' ')}`);
-          console.log(`Key-related settings: ${(body.match(/["']?(apikey|apiKey|isApikeyValid|apikeyValid|key)["']?\s*:\s*[^,}]{1,60}/g) ?? []).slice(0, 12).join(' | ')}`);
+          const loader = await fetch(`https://api-maps.yandex.ru/2.1/?lang=ru_RU&apikey=${key}`, { headers: { Referer: site.origin + '/' } }).then(reply => reply.text());
+          const keyValid = loader.match(/"apikeyValid":(\w+)/)?.[1];
+          console.log(`Yandex accepts the key ${key.slice(0, 8)}… for ${site.origin}: ${keyValid}`);
 
           const browser = await puppeteer.launch({ executablePath: '/usr/bin/google-chrome', args: ['--no-sandbox'] });
           const page = await browser.newPage();
@@ -115,4 +100,5 @@ jobs:
           await browser.close();
           assert.ok(['yandex', 'esri'].includes(provider), `The map did not load (${provider}).`);
           assert.equal(corners, 3);
+          assert.equal(keyValid, 'true', 'Yandex does not accept the API key in config.js for this site.');
           JS
